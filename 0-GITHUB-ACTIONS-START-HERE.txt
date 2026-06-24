@@ -1,0 +1,22 @@
+GitHub Actions 云端自动打包说明
+
+这个版本已经内置：
+.github/workflows/build-windows.yml
+
+你把整个项目上传到 GitHub 后，GitHub 会自动在云端生成 Windows 安装包。
+
+最简流程：
+1. 登录 GitHub。
+2. 新建仓库，例如 resume-ai-screener。
+3. 上传本项目所有文件和文件夹，必须包含 .github/workflows/build-windows.yml。
+4. 进入仓库的 Actions 页面。
+5. 点击 Build Windows Installer。
+6. 点击 Run workflow。
+7. 等待 5-15 分钟。
+8. 打包完成后，进入本次运行记录，在 Artifacts 区域下载 Resume-AI-Screener-Windows-Installer。
+9. 解压下载的 artifact，即可看到 Setup.exe 安装包。
+
+注意：
+- 不要把 DeepSeek API Key 上传到 GitHub。
+- 最终用户第一次打开软件时，在软件里输入自己的 API Key。
+- 未签名的 Windows 安装包可能会被 Windows 提示“未知发布者”，这是正常现象；商业分发需要购买代码签名证书。
