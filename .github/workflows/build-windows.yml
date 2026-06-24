@@ -6,22 +6,20 @@ on:
     branches:
       - main
       - master
-    tags:
-      - "v*"
 
 permissions:
   contents: read
 
 jobs:
   build-windows:
-    name: Build Windows Setup.exe
+    name: Build Windows installer and portable app
     runs-on: windows-latest
 
     env:
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
       USE_HARD_LINKS: "false"
-      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\\.cache\\electron-builder
       ELECTRON_CACHE: ${{ github.workspace }}\\.cache\\electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\\.cache\\electron-builder
 
     steps:
       - name: Checkout source code
@@ -30,29 +28,42 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
+          cache: "npm"
 
-      - name: Show environment
+      - name: Show project files
+        shell: pwsh
         run: |
           node -v
           npm -v
-          pwd
-          dir
+          Get-ChildItem
+          if (!(Test-Path package.json)) {
+            Write-Error "package.json not found. Please upload the project root folder correctly."
+          }
+          if (!(Test-Path main.js)) {
+            Write-Error "main.js not found. Please upload the fixed v3 package correctly."
+          }
+          if (!(Test-Path src)) {
+            Write-Error "src folder not found."
+          }
 
       - name: Install dependencies
-        run: npm install
+        run: npm install --no-audit --no-fund
 
       - name: Build Windows installer and portable app
-        run: npm run dist:win
+        run: npx electron-builder --win --publish never
 
       - name: List build output
         if: always()
-        run: |
-          echo "===== dist folder ====="
-          if (Test-Path dist) { Get-ChildItem -Recurse dist | Format-Table FullName, Length } else { echo "dist folder not found" }
         shell: pwsh
+        run: |
+          if (Test-Path dist) {
+            Get-ChildItem -Recurse dist
+          } else {
+            echo "dist folder not found"
+          }
 
-      - name: Upload Windows installer artifact
+      - name: Upload Windows installer files
         uses: actions/upload-artifact@v4
         with:
           name: Resume-AI-Screener-Windows-Installer
