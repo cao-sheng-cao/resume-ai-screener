@@ -20,3 +20,6 @@ GitHub Actions 云端自动打包说明
 - 不要把 DeepSeek API Key 上传到 GitHub。
 - 最终用户第一次打开软件时，在软件里输入自己的 API Key。
 - 未签名的 Windows 安装包可能会被 Windows 提示“未知发布者”，这是正常现象；商业分发需要购买代码签名证书。
+
+
+重要修复：本版本已修复 app.asar 中找不到 src/main/main.js 的打包错误。请上传所有文件到 GitHub 仓库根目录，尤其不要漏掉 main.js 和 src 文件夹。

@@ -1,8 +1,8 @@
 {
   "name": "resume-ai-screener-electron",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Electron desktop app for AI-powered resume screening with editable job standards, evidence-based scoring, confidence and leaderboard.",
-  "main": "src/main/main.js",
+  "main": "main.js",
   "author": "Resume AI Screener",
   "license": "MIT",
   "private": true,
@@ -27,8 +27,11 @@
       "output": "dist"
     },
     "files": [
+      "main.js",
+      "package.json",
       "src/**/*",
-      "package.json"
+      "!**/*.map",
+      "!**/.DS_Store"
     ],
     "win": {
       "icon": "src/assets/app-icon.ico",
@@ -45,6 +48,7 @@
       "shortcutName": "简历岗位匹配评分系统",
       "installerIcon": "src/assets/app-icon.ico",
       "uninstallerIcon": "src/assets/app-icon.ico"
-    }
+    },
+    "asar": false
   }
 }

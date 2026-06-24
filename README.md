@@ -141,3 +141,30 @@ Resume-AI-Screener-Windows-Installer
 - 不要把 DeepSeek API Key 写入代码，也不要上传到 GitHub。
 - 这个安装包默认没有商业代码签名，Windows 可能显示“未知发布者”。这是未签名应用的正常提示。
 - 商业分发时建议购买代码签名证书。
+
+
+## v3 fixed 打包修复说明
+
+本版本修复了 GitHub Actions 中 electron-builder 报错：
+
+`Application entry file "src\main\main.js" ... does not exist`
+
+修复方式：
+
+- 新增根目录 `main.js` 作为稳定入口；
+- 将 `package.json` 的 `main` 改为 `main.js`；
+- 在 electron-builder 配置中明确包含 `main.js` 和 `src/**/*`；
+- 设置 `asar: false`，避免 app.asar 入口文件检测误判；
+- 将 GitHub Actions Node.js 升级到 22，并增加项目结构检查。
+
+上传到 GitHub 后，请确认仓库根目录能直接看到：
+
+```txt
+package.json
+main.js
+src
+.github
+README.md
+```
+
+然后重新运行 Actions：`Build Windows Installer`。
