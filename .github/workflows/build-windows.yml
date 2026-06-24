@@ -1,0 +1,64 @@
+name: Build Windows Installer
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  build-windows:
+    name: Build Windows Setup.exe
+    runs-on: windows-latest
+
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      USE_HARD_LINKS: "false"
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\\.cache\\electron-builder
+      ELECTRON_CACHE: ${{ github.workspace }}\\.cache\\electron
+
+    steps:
+      - name: Checkout source code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Show environment
+        run: |
+          node -v
+          npm -v
+          pwd
+          dir
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build Windows installer and portable app
+        run: npm run dist:win
+
+      - name: List build output
+        if: always()
+        run: |
+          echo "===== dist folder ====="
+          if (Test-Path dist) { Get-ChildItem -Recurse dist | Format-Table FullName, Length } else { echo "dist folder not found" }
+        shell: pwsh
+
+      - name: Upload Windows installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Resume-AI-Screener-Windows-Installer
+          path: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/*.yml
+          if-no-files-found: error
+          retention-days: 14
