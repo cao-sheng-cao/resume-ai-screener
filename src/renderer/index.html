@@ -96,14 +96,14 @@
             </div>
             <div class="strictness-value" id="strictnessBadge">3度｜标准推荐</div>
           </div>
-          <input id="strictnessLevel" type="range" min="1" max="5" step="1" value="3" />
+          <input id="strictnessLevel" class="strictness-slider" type="range" min="1" max="5" step="1" value="3" aria-label="人工智能判断严格程度" />
           <div class="strictness-scale">
             <span>1 宽松</span><span>2</span><span>3 标准</span><span>4</span><span>5 极严格</span>
           </div>
           <div class="strictness-info" id="strictnessInfo"></div>
           <div class="strictness-examples">
             <strong>同一种情况参考：</strong>
-            <div id="strictnessExample">例如候选人有云生态合作经验，但没有明确写直接云产品销售：3度会判为“云背景部分满足，直接云销售与 closing 待核实”。</div>
+            <div id="strictnessExample">例如候选人有云生态合作经验，但没有明确写直接云产品销售：3度会判为“云背景部分满足，直接云销售与 成交能力待核实”。</div>
           </div>
           <div class="actions no-margin">
             <button class="ghost" id="saveStrictnessBtn">保存严格度</button>

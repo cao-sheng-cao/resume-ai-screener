@@ -35,8 +35,17 @@ const STRICTNESS_TEXT = {
 const $ = (id) => document.getElementById(id);
 
 window.addEventListener('DOMContentLoaded', async () => {
-  bindEvents();
-  await initApp();
+  try {
+    bindEvents();
+    await initApp();
+  } catch (err) {
+    console.error('应用初始化失败：', err);
+    const msg = document.getElementById('keyError') || document.body;
+    if (msg) {
+      msg.textContent = '应用初始化失败：' + (err.message || String(err));
+      if (msg.style) msg.style.display = 'block';
+    }
+  }
 });
 
 function bindEvents() {
@@ -231,7 +240,8 @@ async function addProject() {
   const name = prompt('请输入新项目名称，例如：腾讯云法国销售岗｜本周寻访');
   if (!name || !name.trim()) return;
   const defaultStandard = await window.resumeApp.getDefaultStandard();
-  const standard = getStandardFromForm() || defaultStandard;
+  const currentStandard = getStandardFromForm();
+  const standard = currentStandard && currentStandard.mustHave?.length ? currentStandard : defaultStandard;
   const p = createProject(name.trim(), standard, []);
   projects.unshift(p);
   activeProjectId = p.id;
@@ -264,12 +274,13 @@ async function loadKey() {
   }
   if (data?.apiKey) {
     $('apiKey').value = data.apiKey;
-    show('keySuccess', '已读取本机保存的 接口密钥。');
+    show('keySuccess', '已读取本机保存的接口密钥。');
   } else show('keyError', '当前电脑还没有保存接口密钥。');
 }
 
 async function clearKey() {
-  if (!confirm('确定清除已保存的接口密钥 吗？')) return;
+  hideMessages(['keySuccess', 'keyError']);
+  if (!confirm('确定清除已保存的接口密钥吗？')) return;
   await window.resumeApp.clearKey();
   $('apiKey').value = '';
   show('keySuccess', '已清除接口密钥。');
@@ -277,7 +288,7 @@ async function clearKey() {
 
 async function initModelSelect() {
   try {
-    deepseekModels = await window.resumeApp.get深度求索Models();
+    deepseekModels = await window.resumeApp.getDeepSeekModels();
   } catch {
     deepseekModels = [
       { id: 'deepseek-v4-flash', label: '深度求索第四代极速｜严谨推理', thinking: 'enabled', note: '默认推荐' },
@@ -302,12 +313,54 @@ async function initModelSelect() {
 function updateModelInfo() {
   const key = $('modelSelect').value;
   const m = deepseekModels.find(x => `${x.id}:${x.thinking || ''}` === key);
-  $('modelInfo').textContent = m ? `${m.note}。实际调用：${m.id}${m.thinking ? ' / thinking=' + m.thinking : ''}` : '当前模型配置将随评分请求一起发送。';
+  const modeText = m?.thinking === 'enabled' ? '开启推理' : (m?.thinking === 'disabled' ? '关闭推理' : '兼容模式');
+  $('modelInfo').textContent = m ? `${m.note}。当前模式：${modeText}` : '当前模型配置将随评分请求一起发送。';
+}
+
+function updateStrictnessInfo() {
+  const input = $('strictnessLevel');
+  if (!input) return;
+
+  const level = Math.max(1, Math.min(5, Number(input.value || 3)));
+  const cfg = STRICTNESS_TEXT[level] || STRICTNESS_TEXT[3];
+  const progress = ((level - 1) / 4) * 100;
+
+  input.style.setProperty('--strictness-progress', `${progress}%`);
+
+  const badge = $('strictnessBadge');
+  if (badge) {
+    badge.textContent = cfg.label;
+    badge.dataset.level = String(level);
+  }
+
+  const info = $('strictnessInfo');
+  if (info) info.textContent = cfg.info || '';
+
+  const example = $('strictnessExample');
+  if (example) example.textContent = cfg.example || '';
+
+  document.querySelectorAll('.strictness-scale span').forEach((span, index) => {
+    span.classList.toggle('active', index + 1 === level);
+  });
+}
+
+async function saveStrictnessChoice() {
+  hideMessages(['keySuccess', 'keyError']);
+  try {
+    const level = Number(value('strictnessLevel') || 3);
+    await window.resumeApp.saveStrictness(level);
+    updateStrictnessInfo();
+    show('keySuccess', `严格度已保存为 ${STRICTNESS_TEXT[level]?.label || level + '度'}。`);
+  } catch (err) {
+    show('keyError', err.message || String(err));
+  }
 }
 
 async function saveModelChoice() {
+  hideMessages(['keySuccess', 'keyError']);
   try {
     await window.resumeApp.saveModel($('modelSelect').value);
+    updateModelInfo();
     show('keySuccess', '模型选择已保存。');
   } catch (err) {
     show('keyError', err.message || String(err));
@@ -598,6 +651,7 @@ async function addToLeaderboard(data, showAlert) {
   await persistProjects();
   await window.resumeApp.saveLeaderboard(leaderboard);
   refreshLeaderboardFilters();
+  renderProjectList();
   renderLeaderboard();
   if (showAlert) alert('已加入排行榜。');
 }
@@ -718,7 +772,8 @@ async function clearLeaderboard() {
 }
 
 
-function exportCSV() {
+async function exportCSV() {
+  await persistProjects();
   const list = getFilteredLeaderboard();
   if (!list.length) return alert('当前项目的筛选结果为空。');
   const rows = [
@@ -761,7 +816,8 @@ function sanitizeFilename(name) {
   return String(name || '未命名').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
 }
 
-function exportAllProjectsCSV() {
+async function exportAllProjectsCSV() {
+  await persistProjects();
   if (!projects.length) return alert('暂无项目。');
   const rows = [['项目','项目内排名','候选人','大致年龄','年龄推断置信度','年龄推断依据','岗位','归类','备注','分数','置信度','模型','严格度','令牌用量','等级','建议','周次','时间','摘要']];
   projects.forEach(project => {
@@ -823,7 +879,7 @@ async function exportBackup() {
 
     show(
       'backupSuccess',
-      `备份已导出：${result.filePath}。项目 ${result.projectCount || projects.length || 0} 个，当前旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已包含' : '未保存'}，接口密钥：${result.apiKeyIncluded ? '已包含' : '未包含'}。`
+      `备份已导出：${result.filePath}。项目 ${result.projectCount || projects.length || 0} 个，兼容旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已包含' : '未保存'}，接口密钥：${result.apiKeyIncluded ? '已包含' : '未包含'}。`
     );
     setStatus('backupStatus', '');
   } catch (err) {
@@ -851,7 +907,7 @@ async function importBackup() {
 
     show(
       'backupSuccess',
-      `备份导入完成。项目 ${result.projectCount || projects.length || 0} 个，旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已恢复' : '未包含'}，接口密钥：${result.apiKeyImported ? '已导入' : (result.apiKeyPreserved ? '已保留当前电脑原密钥' : '未包含')}。`
+      `备份导入完成。项目 ${result.projectCount || projects.length || 0} 个，兼容旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已恢复' : '未包含'}，接口密钥：${result.apiKeyImported ? '已导入' : (result.apiKeyPreserved ? '已保留当前电脑原密钥' : '未包含')}。`
     );
     setStatus('backupStatus', '');
   } catch (err) {
@@ -871,9 +927,39 @@ function renderList(id, items) {
   arr.forEach(item => { const li = document.createElement('li'); li.textContent = String(item); ul.appendChild(li); });
 }
 
-function value(id) { return $(id).value.trim(); }
-function setText(id, value) { $(id).textContent = value ?? 0; }
-function setStatus(id, text) { $(id).textContent = text || ''; }
-function show(id, text) { const el = $(id); el.textContent = text; el.style.display = 'block'; }
-function hideMessages(ids) { ids.forEach(id => { const el = $(id); el.textContent = ''; el.style.display = 'none'; }); }
-function escapeHtml(str) { return String(str || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'", '&#039;'); }
+function value(id) {
+  const el = $(id);
+  return el ? el.value.trim() : '';
+}
+
+function setText(id, value) {
+  const el = $(id);
+  if (el) el.textContent = value ?? 0;
+}
+
+function setStatus(id, text) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.display = text ? 'block' : 'none';
+}
+
+function show(id, text) {
+  const el = $(id);
+  if (!el) return;
+  el.textContent = text || '';
+  el.style.display = 'block';
+}
+
+function hideMessages(ids) {
+  ids.forEach(id => {
+    const el = $(id);
+    if (!el) return;
+    el.textContent = '';
+    el.style.display = 'none';
+  });
+}
+
+function escapeHtml(str) {
+  return String(str || '').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'", '&#039;');
+}

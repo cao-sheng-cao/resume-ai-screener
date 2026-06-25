@@ -680,7 +680,7 @@ ipcMain.handle('backup:import', async () => {
     writeJson('leaderboard.json', backup.leaderboard);
   }
 
-  if (Array.isArray(backup.projects)) {
+  if (Array.isArray(backup.projects) && backup.projects.length) {
     writeJson('projects.json', backup.projects);
     const firstProject = backup.projects[0];
     if (firstProject?.id) {
@@ -688,6 +688,14 @@ ipcMain.handle('backup:import', async () => {
       settingsAfterProject.activeProjectId = firstProject.id;
       writeJson('settings.json', settingsAfterProject);
     }
+  } else {
+    // 兼容旧版备份：旧版备份没有 projects 字段，只包含 standard / leaderboard。
+    // 导入后删除旧 projects.json，让前端启动时自动把 standard + leaderboard 迁移成一个默认项目。
+    const projectsFile = dataPath('projects.json');
+    if (fs.existsSync(projectsFile)) fs.unlinkSync(projectsFile);
+    const settingsAfterLegacyImport = readJson('settings.json', {});
+    delete settingsAfterLegacyImport.activeProjectId;
+    writeJson('settings.json', settingsAfterLegacyImport);
   }
 
   return {
