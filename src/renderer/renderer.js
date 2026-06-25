@@ -177,18 +177,20 @@ function renderProjectList() {
   const box = $('projectList');
   if (!box) return;
   box.innerHTML = '';
+
   projects.forEach(p => {
     const count = Array.isArray(p.leaderboard) ? p.leaderboard.length : 0;
     const item = document.createElement('div');
     item.className = `project-item ${p.id === activeProjectId ? 'active' : ''}`;
     item.innerHTML = `
-      <button class="project-main" data-project="${p.id}">
+      <button class="project-main" data-project="${escapeHtml(p.id)}">
         <strong>${escapeHtml(p.name)}</strong>
         <span>${count} 位候选人</span>
       </button>
-      <div class="project-actions">
-        <button class="mini ghost" data-rename="${p.id}">改名</button>
-        <button class="mini danger" data-remove-project="${p.id}">删除</button>
+      <div class="project-edit">
+        <input class="project-name-input" data-project-name="${escapeHtml(p.id)}" value="${escapeHtml(p.name)}" />
+        <button class="mini ghost" data-save-project-name="${escapeHtml(p.id)}">保存名称</button>
+        <button class="mini danger" data-remove-project="${escapeHtml(p.id)}">删除</button>
       </div>
     `;
     box.appendChild(item);
@@ -203,55 +205,103 @@ function renderProjectList() {
     currentResult = null;
     $('result').style.display = 'none';
     loadActiveProjectIntoUI();
+    setProjectMessage('已切换项目。');
   });
 
-  box.querySelectorAll('[data-rename]').forEach(btn => btn.onclick = async (event) => {
+  box.querySelectorAll('[data-save-project-name]').forEach(btn => btn.onclick = async (event) => {
     event.stopPropagation();
-    const p = projects.find(x => x.id === btn.dataset.rename);
+    const id = btn.dataset.saveProjectName;
+    const input = box.querySelector(`[data-project-name="${CSS.escape(id)}"]`);
+    const p = projects.find(x => x.id === id);
+    const next = input ? input.value.trim() : '';
     if (!p) return;
-    const next = prompt('请输入新的项目名称：', p.name);
-    if (!next || !next.trim()) return;
-    p.name = next.trim();
+    if (!next) {
+      setProjectMessage('项目名称不能为空。', true);
+      input?.focus();
+      return;
+    }
+    p.name = next;
     p.updatedAt = new Date().toISOString();
     await persistProjects();
+    const nameBox = $('activeProjectName');
+    if (nameBox && p.id === activeProjectId) nameBox.textContent = p.name;
     renderProjectList();
     refreshLeaderboardFilters();
     renderLeaderboard();
+    setProjectMessage('项目名称已保存。');
   });
 
   box.querySelectorAll('[data-remove-project]').forEach(btn => btn.onclick = async (event) => {
     event.stopPropagation();
-    if (projects.length <= 1) return alert('至少需要保留一个项目。');
+    if (projects.length <= 1) {
+      setProjectMessage('至少需要保留一个项目。', true);
+      return;
+    }
+
+    if (btn.dataset.confirmDelete !== 'yes') {
+      btn.dataset.confirmDelete = 'yes';
+      btn.textContent = '再次点击删除';
+      setProjectMessage('再次点击删除按钮，会删除该项目及其项目内排行榜。', true);
+      setTimeout(() => {
+        if (btn.dataset.confirmDelete === 'yes') {
+          btn.dataset.confirmDelete = '';
+          btn.textContent = '删除';
+        }
+      }, 3500);
+      return;
+    }
+
     const p = projects.find(x => x.id === btn.dataset.removeProject);
     if (!p) return;
-    if (!confirm(`确定删除项目“${p.name}”吗？该项目内的排行榜也会删除。建议删除前先导出备份。`)) return;
+
     projects = projects.filter(x => x.id !== p.id);
     if (activeProjectId === p.id) activeProjectId = projects[0].id;
+
     await window.resumeApp.saveProjects(projects);
     await window.resumeApp.saveActiveProjectId(activeProjectId);
     currentResult = null;
     $('result').style.display = 'none';
     loadActiveProjectIntoUI();
+    setProjectMessage('项目已删除。');
   });
 }
 
 async function addProject() {
   await persistProjects();
-  const name = prompt('请输入新项目名称，例如：腾讯云法国销售岗｜本周寻访');
-  if (!name || !name.trim()) return;
+
+  const input = $('projectNameInput');
+  const name = input ? input.value.trim() : '';
+
+  if (!name) {
+    setProjectMessage('请先输入项目名称。', true);
+    input?.focus();
+    return;
+  }
+
   const defaultStandard = await window.resumeApp.getDefaultStandard();
   const currentStandard = getStandardFromForm();
   const standard = currentStandard && currentStandard.mustHave?.length ? currentStandard : defaultStandard;
-  const p = createProject(name.trim(), standard, []);
+  const p = createProject(name, standard, []);
   projects.unshift(p);
   activeProjectId = p.id;
+
   await window.resumeApp.saveProjects(projects);
   await window.resumeApp.saveActiveProjectId(activeProjectId);
+
+  if (input) input.value = '';
   currentResult = null;
   $('result').style.display = 'none';
   loadActiveProjectIntoUI();
+  setProjectMessage('新项目已创建。');
 }
 
+function setProjectMessage(text, isError = false) {
+  const el = $('projectMessage');
+  if (!el) return;
+  el.textContent = text || '';
+  el.classList.toggle('error', Boolean(isError));
+  el.style.display = text ? 'block' : 'none';
+}
 
 async function saveKey() {
   hideMessages(['keySuccess', 'keyError']);

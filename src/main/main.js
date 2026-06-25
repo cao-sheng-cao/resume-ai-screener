@@ -74,26 +74,36 @@ async function parseResumeFile(filePath) {
   let text = '';
   let warning = '';
 
-  if (lower.endsWith('.txt') || lower.endsWith('.md')) {
-    text = buffer.toString('utf-8');
-  } else if (lower.endsWith('.docx')) {
-    const result = await mammoth.extractRawText({ buffer });
-    text = result.value || '';
-  } else if (lower.endsWith('.pdf')) {
-    const result = await pdfParse(buffer);
-    text = result.text || '';
-    if (text.trim().length < 100) {
-      warning = '这个 PDF 可能是扫描件或图片型 PDF，自动读取到的文字较少。建议换 Word 简历，或直接复制简历正文粘贴。';
+  try {
+    if (lower.endsWith('.txt') || lower.endsWith('.md')) {
+      text = buffer.toString('utf-8');
+    } else if (lower.endsWith('.docx')) {
+      const result = await mammoth.extractRawText({ buffer });
+      text = result.value || '';
+    } else if (lower.endsWith('.pdf')) {
+      const result = await pdfParse(buffer);
+      text = result.text || '';
+      if (text.trim().length < 100) {
+        warning = '这个 PDF 可能是扫描件、图片型 PDF，或文字层较少。可以继续手动复制正文到文本框后评分。';
+      }
+    } else {
+      throw new Error('暂不支持该文件格式。请上传 PDF、Word、txt，或直接粘贴简历正文。');
     }
-  } else {
-    throw new Error('暂不支持该文件格式。请上传 PDF、Word、txt，或直接粘贴简历正文。');
+  } catch (err) {
+    const reason = err && err.message ? err.message : String(err);
+    throw new Error(
+      '简历读取失败：' + reason +
+      '。建议：1）确认文件没有加密或损坏；2）优先上传可复制文字的 PDF 或 Word；3）如果是扫描件，请直接复制简历正文粘贴到文本框。'
+    );
   }
 
+  const cleaned = cleanText(text);
+
   return {
-    filename: path.常驻name(filePath),
+    filename: path.basename(filePath),
     filePath,
-    text: cleanText(text),
-    charCount: cleanText(text).length,
+    text: cleaned,
+    charCount: cleaned.length,
     warning
   };
 }

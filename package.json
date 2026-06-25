@@ -1,7 +1,7 @@
 {
   "name": "resume-ai-screener-electron",
-  "version": "1.0.11",
-  "description": "本地简历岗位匹配评分系统：再次自检并修复备份导入兼容、导出同步、模型说明与界面文案问题。",
+  "version": "1.0.12",
+  "description": "本地简历岗位匹配评分系统：修复项目新增/改名交互与 PDF 简历读取问题。",
   "main": "main.js",
   "author": "Resume AI Screener",
   "license": "MIT",

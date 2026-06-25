@@ -1116,3 +1116,59 @@ td {
   }
 }
 
+
+
+/* v1.0.12 项目管理修复：明确输入框与按钮，不再依赖系统弹窗 */
+.project-create {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.project-create input {
+  height: 38px;
+  font-size: 13px;
+  border-radius: 14px;
+  background: #ffffff;
+}
+
+.project-create button {
+  width: 100%;
+  justify-content: center;
+}
+
+.project-edit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 7px;
+  padding: 0 6px 6px;
+}
+
+.project-name-input {
+  height: 34px;
+  padding: 8px 10px;
+  font-size: 12px;
+  border-radius: 12px;
+}
+
+.project-message {
+  display: none;
+  margin-top: 10px;
+  padding: 9px 10px;
+  border-radius: 13px;
+  background: #eeeeeb;
+  color: #5f605b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.project-message.error {
+  background: #f2e9e7;
+  color: #8d4b46;
+}
+
+.project-actions {
+  display: none;
+}
+
