@@ -90,7 +90,7 @@ async function parseResumeFile(filePath) {
   }
 
   return {
-    filename: path.basename(filePath),
+    filename: path.常驻name(filePath),
     filePath,
     text: cleanText(text),
     charCount: cleanText(text).length,
@@ -139,12 +139,12 @@ function normalizeUsage(usage) {
 }
 
 const DEEPSEEK_MODELS = [
-  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜快速评分', thinking: 'disabled', note: '速度快、成本低，适合批量初筛' },
-  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜严谨推理', thinking: 'enabled', note: '默认推荐的严谨模式，适合重点候选人复核' },
-  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量评分', thinking: 'disabled', note: '质量更高、成本更高' },
-  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量推理', thinking: 'enabled', note: '最严谨但更慢、更贵' },
-  { id: 'deepseek-chat', label: 'Legacy deepseek-chat｜兼容快速模式', thinking: '', note: '旧兼容模型名，对应非思考模式' },
-  { id: 'deepseek-reasoner', label: 'Legacy deepseek-reasoner｜兼容推理模式', thinking: '', note: '旧兼容模型名，对应思考模式' }
+  { id: 'deepseek-v4-flash', label: '深度求索第四代极速｜快速评分', thinking: 'disabled', note: '速度快、成本低，适合批量初筛' },
+  { id: 'deepseek-v4-flash', label: '深度求索第四代极速｜严谨推理', thinking: 'enabled', note: '默认推荐的严谨模式，适合重点候选人复核' },
+  { id: 'deepseek-v4-pro', label: '深度求索第四代专业｜高质量评分', thinking: 'disabled', note: '质量更高、成本更高' },
+  { id: 'deepseek-v4-pro', label: '深度求索第四代专业｜高质量推理', thinking: 'enabled', note: '最严谨但更慢、更贵' },
+  { id: 'deepseek-chat', label: '旧版对话模型｜兼容快速模式', thinking: '', note: '旧兼容模型名，对应非思考模式' },
+  { id: 'deepseek-reasoner', label: '旧版推理模型｜兼容推理模式', thinking: '', note: '旧兼容模型名，对应思考模式' }
 ];
 
 const STRICTNESS_LEVELS = {
@@ -166,7 +166,7 @@ const STRICTNESS_LEVELS = {
   4: {
     label: '4度｜严格证据',
     temperature: 0.1,
-    guide: '用于重点岗位复核。必须有清晰原文证据；相邻经验只能给较低部分分；缺少 quota、deal size、客户层级等硬证据要明显扣分。'
+    guide: '用于重点岗位复核。必须有清晰原文证据；相邻经验只能给较低部分分；缺少 销售指标、合同规模、客户层级等硬证据要明显扣分。'
   },
   5: {
     label: '5度｜极严格硬筛',
@@ -189,19 +189,19 @@ function buildStrictnessInstruction(level) {
     4: '严格：必须有明确原文证据；缺少硬指标、客户层级、签约结果时明显扣分。',
     5: '极严格：只承认直接、明确、可验证证据；没有写出的内容不得推断，模糊项倾向不满足或待核实。'
   };
-  return `【AI 判断严格程度】
+  return `【人工智能判断严格程度】
 当前严格度：${cfg.label}
 总体原则：${cfg.guide}
 执行规则：${table[cfg.level]}
 
 同一种情况的参考判断：
-- 情况A：候选人有云生态/合作伙伴/Marketplace经验，但没有明确写“直接销售云产品并独立close客户”。
-  1度：可视为较强相关，Sales/云背景可给较高部分分；
-  3度：云背景部分满足，直接云销售与closing需待核实；
-  5度：不得视为直接云销售，云销售/closing只能给低部分分或待核实。
-- 情况B：候选人写“管理战略客户关系”，但没有写C-level、合同金额、quota。
+- 情况A：候选人有云生态/合作伙伴/云市场经验，但没有明确写“直接销售云产品并独立完成客户成交”。
+  1度：可视为较强相关，销售与云背景可给较高部分分；
+  3度：云背景部分满足，直接云销售与成交能力需待核实；
+  5度：不得视为直接云销售，云销售/成交能力只能给低部分分或待核实。
+- 情况B：候选人写“管理战略客户关系”，但没有写企业高层、合同金额、销售指标。
   1度：可判定有大客户相关经验，但列为待核实；
-  3度：战略客户部分满足，C-level和quota证据不足要扣分；
+  3度：战略客户部分满足，企业高层和销售指标证据不足要扣分；
   5度：不得判定为完整战略大客户销售能力，关键项待核实或不满足。
 - 情况C：候选人年限够，但行业不是完全同类。
   1度：可给较高行业迁移分；
@@ -292,14 +292,14 @@ function normalizeResult(data, passLine) {
       sales: clamp(data?.scoreBreakdown?.sales ?? 0, 0, 100),
       industry: clamp(data?.scoreBreakdown?.industry ?? 0, 0, 100),
       account: clamp(data?.scoreBreakdown?.account ?? 0, 0, 100),
-      closing: clamp(data?.scoreBreakdown?.closing ?? 0, 0, 100),
+      成交: clamp(data?.scoreBreakdown?.成交 ?? 0, 0, 100),
       location: clamp(data?.scoreBreakdown?.location ?? 0, 0, 100),
       language: clamp(data?.scoreBreakdown?.language ?? 0, 0, 100),
       bonus: clamp(data?.scoreBreakdown?.bonus ?? 0, 0, 100),
       overall: clamp(data?.scoreBreakdown?.overall ?? score, 0, 100)
     },
     model: data?.model || 'deepseek-v4-flash',
-    modelLabel: data?.modelLabel || data?.model || 'DeepSeek',
+    modelLabel: data?.modelLabel || data?.model || '深度求索',
     thinkingMode: data?.thinkingMode || '',
     strictnessLevel: clamp(data?.strictnessLevel ?? 3, 1, 5),
     strictnessLabel: data?.strictnessLabel || getStrictnessConfig(data?.strictnessLevel || 3).label,
@@ -421,7 +421,7 @@ ${resumeText}
     "sales": 0,
     "industry": 0,
     "account": 0,
-    "closing": 0,
+    "成交": 0,
     "location": 0,
     "language": 0,
     "bonus": 0,
@@ -431,31 +431,31 @@ ${resumeText}
 }
 
 ipcMain.handle('app:get-default-standard', () => ({
-  jobTitle: 'Tencent Cloud Senior Strategic Sales Executive / Manager - France',
-  positionOverview: '腾讯云法国/南欧高级战略销售岗。岗位 base 巴黎，负责法国及南欧战略客户开发、云业务收入增长、大客户签约、高价值合同谈判，重点行业包括 Retail、Telecom、eCommerce、Gaming。',
-  scoringRule: '总分100分：B2B Sales年限与强度20分；云/科技/数字化行业背景20分；战略大客户经验15分；Hunter与Closing能力15分；法国/南欧市场匹配10分；语言能力10分；目标行业经验5分；云厂/AI/电商加分5分。缺少 Sales、法语、法国/巴黎 base 任一核心项时，原则上不建议推进。',
+  jobTitle: '腾讯云法国高级战略销售负责人',
+  positionOverview: '腾讯云法国/南欧高级战略销售岗。岗位常驻巴黎，负责法国及南欧战略客户开发、云业务收入增长、大客户签约、高价值合同谈判，重点行业包括 零售、电信、电商、游戏。',
+  scoringRule: '总分100分：企业销售年限与强度20分；云/科技/数字化行业背景20分；战略大客户经验15分；主动开发与成交能力15分；法国/南欧市场匹配10分；语言能力10分；目标行业经验5分；云厂、人工智能、电商加分5分。缺少 销售、法语、法国或巴黎常驻任一核心项时，原则上不建议推进。',
   mustHave: [
-    '必须有明确 B2B Sales 经历，简历中需体现客户开发、销售指标、合同签约或 revenue 结果；仅售前、客户成功、市场岗位不算完全满足。',
-    '必须有10年以上科技/云计算/数字化领域 B2B 销售经验。',
-    '必须有完整销售周期经验：prospecting、lead generation、客户开发、合同签订、账户拓展。',
-    '必须有战略大客户或企业级客户管理经验，最好对接 C-level 决策人。',
+    '必须有明确 企业销售 经历，简历中需体现客户开发、销售指标、合同签约或 收入结果；仅售前、客户成功、市场岗位不算完全满足。',
+    '必须有10年以上科技/云计算/数字化领域 企业销售经验。',
+    '必须有完整销售周期经验：线索挖掘、潜在客户开发、客户推进、合同签订、账户拓展。',
+    '必须有战略大客户或企业级客户管理经验，最好对接 企业高层决策人。',
     '必须英语流利，能进行跨国团队协作和商务沟通。',
     '必须法语熟练，能支持法国客户商务沟通、谈判或高层关系维护。',
-    '必须能够 base 巴黎或法国，或明确愿意 relocate 到巴黎/法国。',
-    '必须体现 hunter、closing、quota/revenue 结果导向。'
+    '必须能够 常驻巴黎或法国，或明确愿意 迁往巴黎或法国。',
+    '必须体现 主动开发、成交、销售指标/收入结果导向。'
   ],
   niceToHave: [
-    '有 AWS、Azure、Google Cloud、Oracle Cloud、阿里云、华为云、腾讯云、OVHcloud、Scaleway 等云厂或云服务商销售经验优先。',
-    '卖过 IaaS、PaaS、CDN、安全、数据库、AI 云服务、数据平台、企业 SaaS 等复杂云/数字化解决方案优先。',
-    '有法国或南欧战略客户资源优先，尤其是 Retail、Telecom、eCommerce、Gaming 行业客户。',
+    '有 主流云厂商或云服务商 等云厂或云服务商销售经验优先。',
+    '卖过 基础云服务、平台云服务、内容分发、安全、数据库、人工智能云服务、数据平台、企业软件 等复杂云/数字化解决方案优先。',
+    '有法国或南欧战略客户资源优先，尤其是 零售、电信、电商、游戏 行业客户。',
     '有百万欧元级别或复杂高价值合同谈判经验优先。',
-    '有 AI 项目、AI infrastructure、LLM、智能化解决方案经验优先。',
+    '有 人工智能项目、人工智能基础设施、大语言模型、智能化解决方案经验优先。',
     '有电商行业背景或服务电商客户经验优先。'
   ],
   vetoItems: [
-    '没有真正 Sales 经历，只是售前、技术、产品、客户成功或市场。',
+    '没有真正 销售经历，只是售前、技术、产品、客户成功或市场。',
     '不会法语，且无法支持法国本地客户商务沟通。',
-    '不能 base 巴黎/法国，也没有法国或南欧市场经验。',
+    '不能常驻巴黎或法国，也没有法国或南欧市场经验。',
     '没有科技、云计算、数字化或企业软件行业销售经验。'
   ]
 }));
@@ -469,8 +469,8 @@ ipcMain.handle('settings:load-key', () => {
 
 ipcMain.handle('settings:save-key', (event, apiKey) => {
   const key = String(apiKey || '').trim();
-  if (!key) throw new Error('请先输入 DeepSeek API Key。');
-  if (!key.startsWith('sk-')) throw new Error('这个 Key 看起来格式不太对。DeepSeek API Key 通常以 sk- 开头。');
+  if (!key) throw new Error('请先输入深度求索接口密钥。');
+  if (!key.startsWith('sk-')) throw new Error('这个密钥看起来格式不太对。深度求索接口密钥通常以 sk- 开头。');
   const settings = readJson('settings.json', {});
   settings.apiKey = key;
   writeJson('settings.json', settings);
@@ -514,8 +514,8 @@ ipcMain.handle('resume:select-and-parse', async () => {
     title: '选择候选人简历',
     properties: ['openFile'],
     filters: [
-      { name: 'Resume Files', extensions: ['pdf', 'docx', 'txt', 'md'] },
-      { name: 'All Files', extensions: ['*'] }
+      { name: '简历文件', extensions: ['pdf', 'docx', 'txt', 'md'] },
+      { name: '全部文件', extensions: ['*'] }
     ]
   });
   if (result.canceled || !result.filePaths?.length) return { canceled: true };
@@ -529,6 +529,23 @@ ipcMain.handle('leaderboard:save', (event, items) => {
 });
 ipcMain.handle('leaderboard:clear', () => {
   writeJson('leaderboard.json', []);
+  return { ok: true };
+});
+
+
+ipcMain.handle('projects:load', () => readJson('projects.json', []));
+ipcMain.handle('projects:save', (event, projects) => {
+  writeJson('projects.json', Array.isArray(projects) ? projects : []);
+  return { ok: true };
+});
+ipcMain.handle('projects:get-active', () => {
+  const settings = readJson('settings.json', {});
+  return settings.activeProjectId || '';
+});
+ipcMain.handle('projects:save-active', (event, projectId) => {
+  const settings = readJson('settings.json', {});
+  settings.activeProjectId = String(projectId || '');
+  writeJson('settings.json', settings);
   return { ok: true };
 });
 
@@ -546,6 +563,7 @@ function buildBackupObject(options = {}) {
   const settings = readJson('settings.json', {});
   const standard = readJson('standard.json', null);
   const leaderboard = readJson('leaderboard.json', []);
+  const projects = readJson('projects.json', []);
 
   const safeSettings = { ...settings };
   if (!includeApiKey) {
@@ -561,11 +579,12 @@ function buildBackupObject(options = {}) {
     apiKeyIncluded: includeApiKey && Boolean(settings.apiKey),
     settings: safeSettings,
     standard,
+    projects: Array.isArray(projects) ? projects : [],
     leaderboard: Array.isArray(leaderboard) ? leaderboard : [],
     meta: {
       note: includeApiKey
-        ? 'This backup may include a DeepSeek API Key. Do not share it with others.'
-        : 'This backup does not include the DeepSeek API Key.',
+        ? '该备份可能包含深度求索接口密钥，请勿分享给他人。'
+        : '该备份不包含深度求索接口密钥。',
       exportedFrom: process.platform
     }
   };
@@ -595,7 +614,7 @@ ipcMain.handle('backup:export', async (event, options = {}) => {
     title: '导出完整数据备份',
     defaultPath,
     filters: [
-      { name: 'JSON Backup', extensions: ['json'] }
+      { name: '数据备份文件', extensions: ['json'] }
     ]
   });
 
@@ -611,6 +630,7 @@ ipcMain.handle('backup:export', async (event, options = {}) => {
     filePath: result.filePath,
     apiKeyIncluded: backup.apiKeyIncluded,
     leaderboardCount: backup.leaderboard.length,
+    projectCount: Array.isArray(backup.projects) ? backup.projects.length : 0,
     hasStandard: Boolean(backup.standard)
   };
 });
@@ -620,8 +640,8 @@ ipcMain.handle('backup:import', async () => {
     title: '导入完整数据备份',
     properties: ['openFile'],
     filters: [
-      { name: 'JSON Backup', extensions: ['json'] },
-      { name: 'All Files', extensions: ['*'] }
+      { name: '数据备份文件', extensions: ['json'] },
+      { name: '全部文件', extensions: ['*'] }
     ]
   });
 
@@ -641,7 +661,7 @@ ipcMain.handle('backup:import', async () => {
     ...importedSettings
   };
 
-  // If the imported backup does not contain an API Key, keep the current local API Key.
+  // 如果导入的备份不包含接口密钥，则保留当前电脑本地已有密钥。
   if (!importedSettings.apiKey && currentSettings.apiKey) {
     mergedSettings.apiKey = currentSettings.apiKey;
   }
@@ -660,6 +680,16 @@ ipcMain.handle('backup:import', async () => {
     writeJson('leaderboard.json', backup.leaderboard);
   }
 
+  if (Array.isArray(backup.projects)) {
+    writeJson('projects.json', backup.projects);
+    const firstProject = backup.projects[0];
+    if (firstProject?.id) {
+      const settingsAfterProject = readJson('settings.json', {});
+      settingsAfterProject.activeProjectId = firstProject.id;
+      writeJson('settings.json', settingsAfterProject);
+    }
+  }
+
   return {
     ok: true,
     filePath,
@@ -667,6 +697,7 @@ ipcMain.handle('backup:import', async () => {
     apiKeyPreserved: Boolean(!importedSettings.apiKey && currentSettings.apiKey),
     hasStandard: Boolean(backup.standard),
     leaderboardCount: Array.isArray(backup.leaderboard) ? backup.leaderboard.length : 0,
+    projectCount: Array.isArray(backup.projects) ? backup.projects.length : 0,
     backupTime: backup.backupTime || ''
   };
 });
@@ -675,7 +706,7 @@ ipcMain.handle('backup:import', async () => {
 ipcMain.handle('ai:analyze', async (event, payload) => {
   const settings = readJson('settings.json', {});
   const apiKey = String(payload.apiKey || settings.apiKey || '').trim();
-  if (!apiKey) throw new Error('请先输入并保存 DeepSeek API Key。');
+  if (!apiKey) throw new Error('请先输入并保存深度求索接口密钥。');
 
   const resumeText = cleanText(payload.resumeText);
   if (!resumeText) throw new Error('简历正文为空。请先读取简历或直接粘贴简历正文。');
@@ -719,7 +750,7 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
 
   const raw = await response.text();
   if (!response.ok) {
-    throw new Error('DeepSeek API 请求失败：' + raw.slice(0, 800));
+    throw new Error('深度求索接口请求失败：' + raw.slice(0, 800));
   }
 
   const data = JSON.parse(raw);

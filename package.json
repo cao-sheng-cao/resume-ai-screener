@@ -1,7 +1,7 @@
 {
   "name": "resume-ai-screener-electron",
-  "version": "1.0.6",
-  "description": "Electron desktop app for AI resume screening with model selection, token usage, backup, notes/categories, strictness control, and candidate name/age inference.",
+  "version": "1.0.8",
+  "description": "本地简历岗位匹配评分系统，支持多项目、项目内独立排行榜、全量排行榜导出与极简低饱和灰色界面。",
   "main": "main.js",
   "author": "Resume AI Screener",
   "license": "MIT",

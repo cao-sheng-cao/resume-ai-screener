@@ -1,31 +1,33 @@
 let currentResult = null;
 let leaderboard = [];
 let deepseekModels = [];
+let projects = [];
+let activeProjectId = '';
 
 const STRICTNESS_TEXT = {
   1: {
     label: '1度｜宽松探索',
-    info: '适合人才池拓展。AI 会更愿意认可相邻行业、相关职责和潜力匹配，但仍会标注待核实项。',
+    info: '适合人才池拓展。人工智能会更愿意认可相邻行业、相关职责和潜力匹配，但仍会标注待核实项。',
     example: '同一情况：候选人有云生态/合作伙伴经验但没有直接云销售。1度会倾向认为“较强相关”，云背景和销售能力可给较高部分分。'
   },
   2: {
     label: '2度｜适度宽松',
-    info: '适合一般初筛。AI 可以把相关经验折算为部分满足，但核心必要项仍需要简历证据。',
-    example: '同一情况：候选人写过战略客户关系但没有 quota。2度会认为“大客户经验部分满足”，并提醒 quota 待核实。'
+    info: '适合一般初筛。人工智能可以把相关经验折算为部分满足，但核心必要项仍需要简历证据。',
+    example: '同一情况：候选人写过战略客户关系但没有 销售指标。2度会认为“大客户经验部分满足”，并提醒 销售指标 待核实。'
   },
   3: {
     label: '3度｜标准推荐',
-    info: '默认推荐。AI 严格按岗位标准和简历原文判断；没有明确证据不得给满分。',
-    example: '同一情况：候选人有云生态合作经验但没有直接云产品销售。3度会判为“云背景部分满足，直接云销售与 closing 待核实”。'
+    info: '默认推荐。人工智能严格按岗位标准和简历原文判断；没有明确证据不得给满分。',
+    example: '同一情况：候选人有云生态合作经验但没有直接云产品销售。3度会判为“云背景部分满足，直接云销售与 成交 待核实”。'
   },
   4: {
     label: '4度｜严格证据',
-    info: '适合重点候选人复核。AI 更看重硬证据，例如 quota、deal size、客户层级、签约结果。',
-    example: '同一情况：候选人只写 Business Development，没有写 closing 或合同金额。4度会明显扣分，并把 closing 能力列为风险。'
+    info: '适合重点候选人复核。人工智能更看重硬证据，例如 销售指标、合同规模、客户层级、签约结果。',
+    example: '同一情况：候选人只写 商务拓展，没有写 成交 或合同金额。4度会明显扣分，并把 成交 能力列为风险。'
   },
   5: {
     label: '5度｜极严格硬筛',
-    info: '适合高价值岗位或终面前硬筛。AI 只承认直接、明确、可验证的简历证据，模糊项倾向待核实/不满足。',
+    info: '适合高价值岗位或终面前硬筛。人工智能只承认直接、明确、可验证的简历证据，模糊项倾向待核实/不满足。',
     example: '同一情况：候选人没有明确写法语商务谈判、法国客户或云产品销售。5度不会推断满足，只会判为待核实或不满足。'
   }
 };
@@ -47,6 +49,8 @@ function bindEvents() {
   $('saveStrictnessBtn').onclick = saveStrictnessChoice;
   $('toggleKeyBtn').onclick = () => $('apiKey').type = $('apiKey').type === 'password' ? 'text' : 'password';
   $('openDataFolderBtn').onclick = () => window.resumeApp.openDataFolder();
+  $('addProjectBtn').onclick = addProject;
+  $('exportAllCsvBtn').onclick = exportAllProjectsCSV;
 
   $('restoreDefaultBtn').onclick = restoreDefaultStandard;
   $('saveStandardBtn').onclick = saveStandard;
@@ -69,11 +73,9 @@ function bindEvents() {
   $('importBackupBtn').onclick = importBackup;
 }
 
+
 async function initApp() {
   await initModelSelect();
-  const savedStandard = await window.resumeApp.loadStandard();
-  if (savedStandard) setStandardToForm(savedStandard);
-  else setStandardToForm(await window.resumeApp.getDefaultStandard());
 
   const key = await window.resumeApp.loadKey();
   if (key?.modelKey) {
@@ -86,19 +88,166 @@ async function initApp() {
   updateStrictnessInfo();
   if (key?.apiKey) {
     $('apiKey').value = key.apiKey;
-    show('keySuccess', '已读取本机保存的 API Key。');
+    show('keySuccess', '已读取本机保存的接口密钥。');
   }
 
-  leaderboard = migrateLeaderboard(await window.resumeApp.loadLeaderboard());
-  await window.resumeApp.saveLeaderboard(leaderboard);
+  const defaultStandard = await window.resumeApp.getDefaultStandard();
+  const legacyStandard = await window.resumeApp.loadStandard();
+  const legacyLeaderboard = migrateLeaderboard(await window.resumeApp.loadLeaderboard());
+  await initProjects(defaultStandard, legacyStandard, legacyLeaderboard);
+}
+
+function createProject(name, standard, items = []) {
+  const now = new Date().toISOString();
+  return {
+    id: `project_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: name || '新项目',
+    standard: standard || null,
+    leaderboard: Array.isArray(items) ? items : [],
+    createdAt: now,
+    updatedAt: now
+  };
+}
+
+function normalizeProject(project, fallbackStandard) {
+  return {
+    id: project?.id || `project_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    name: String(project?.name || '未命名项目'),
+    standard: project?.standard || fallbackStandard,
+    leaderboard: migrateLeaderboard(project?.leaderboard || []),
+    createdAt: project?.createdAt || new Date().toISOString(),
+    updatedAt: project?.updatedAt || new Date().toISOString()
+  };
+}
+
+async function initProjects(defaultStandard, legacyStandard, legacyLeaderboard) {
+  const loaded = await window.resumeApp.loadProjects();
+  projects = Array.isArray(loaded) ? loaded.map(p => normalizeProject(p, defaultStandard)) : [];
+
+  if (!projects.length) {
+    projects = [
+      createProject('默认项目', legacyStandard || defaultStandard, legacyLeaderboard || [])
+    ];
+    await window.resumeApp.saveProjects(projects);
+  }
+
+  const savedActive = await window.resumeApp.getActiveProjectId();
+  activeProjectId = projects.some(p => p.id === savedActive) ? savedActive : projects[0].id;
+  await window.resumeApp.saveActiveProjectId(activeProjectId);
+  loadActiveProjectIntoUI();
+}
+
+function activeProject() {
+  return projects.find(p => p.id === activeProjectId) || projects[0] || null;
+}
+
+async function persistProjects() {
+  const p = activeProject();
+  if (p) {
+    p.standard = getStandardFromForm();
+    p.leaderboard = leaderboard;
+    p.updatedAt = new Date().toISOString();
+  }
+  await window.resumeApp.saveProjects(projects);
+  await window.resumeApp.saveActiveProjectId(activeProjectId);
+}
+
+function loadActiveProjectIntoUI() {
+  const p = activeProject();
+  if (!p) return;
+  setStandardToForm(p.standard);
+  leaderboard = migrateLeaderboard(p.leaderboard || []);
+  const nameBox = $('activeProjectName');
+  if (nameBox) nameBox.textContent = p.name;
+  renderProjectList();
+  refreshLeaderboardFilters();
   renderLeaderboard();
 }
+
+function renderProjectList() {
+  const box = $('projectList');
+  if (!box) return;
+  box.innerHTML = '';
+  projects.forEach(p => {
+    const count = Array.isArray(p.leaderboard) ? p.leaderboard.length : 0;
+    const item = document.createElement('div');
+    item.className = `project-item ${p.id === activeProjectId ? 'active' : ''}`;
+    item.innerHTML = `
+      <button class="project-main" data-project="${p.id}">
+        <strong>${escapeHtml(p.name)}</strong>
+        <span>${count} 位候选人</span>
+      </button>
+      <div class="project-actions">
+        <button class="mini ghost" data-rename="${p.id}">改名</button>
+        <button class="mini danger" data-remove-project="${p.id}">删除</button>
+      </div>
+    `;
+    box.appendChild(item);
+  });
+
+  box.querySelectorAll('[data-project]').forEach(btn => btn.onclick = async () => {
+    const id = btn.dataset.project;
+    if (id === activeProjectId) return;
+    await persistProjects();
+    activeProjectId = id;
+    await window.resumeApp.saveActiveProjectId(activeProjectId);
+    currentResult = null;
+    $('result').style.display = 'none';
+    loadActiveProjectIntoUI();
+  });
+
+  box.querySelectorAll('[data-rename]').forEach(btn => btn.onclick = async (event) => {
+    event.stopPropagation();
+    const p = projects.find(x => x.id === btn.dataset.rename);
+    if (!p) return;
+    const next = prompt('请输入新的项目名称：', p.name);
+    if (!next || !next.trim()) return;
+    p.name = next.trim();
+    p.updatedAt = new Date().toISOString();
+    await persistProjects();
+    renderProjectList();
+    refreshLeaderboardFilters();
+    renderLeaderboard();
+  });
+
+  box.querySelectorAll('[data-remove-project]').forEach(btn => btn.onclick = async (event) => {
+    event.stopPropagation();
+    if (projects.length <= 1) return alert('至少需要保留一个项目。');
+    const p = projects.find(x => x.id === btn.dataset.removeProject);
+    if (!p) return;
+    if (!confirm(`确定删除项目“${p.name}”吗？该项目内的排行榜也会删除。建议删除前先导出备份。`)) return;
+    projects = projects.filter(x => x.id !== p.id);
+    if (activeProjectId === p.id) activeProjectId = projects[0].id;
+    await window.resumeApp.saveProjects(projects);
+    await window.resumeApp.saveActiveProjectId(activeProjectId);
+    currentResult = null;
+    $('result').style.display = 'none';
+    loadActiveProjectIntoUI();
+  });
+}
+
+async function addProject() {
+  await persistProjects();
+  const name = prompt('请输入新项目名称，例如：腾讯云法国销售岗｜本周寻访');
+  if (!name || !name.trim()) return;
+  const defaultStandard = await window.resumeApp.getDefaultStandard();
+  const standard = getStandardFromForm() || defaultStandard;
+  const p = createProject(name.trim(), standard, []);
+  projects.unshift(p);
+  activeProjectId = p.id;
+  await window.resumeApp.saveProjects(projects);
+  await window.resumeApp.saveActiveProjectId(activeProjectId);
+  currentResult = null;
+  $('result').style.display = 'none';
+  loadActiveProjectIntoUI();
+}
+
 
 async function saveKey() {
   hideMessages(['keySuccess', 'keyError']);
   try {
     await window.resumeApp.saveKey($('apiKey').value.trim());
-    show('keySuccess', 'API Key 已保存到当前电脑本地。');
+    show('keySuccess', '接口密钥已保存到当前电脑本地。');
   } catch (err) { show('keyError', err.message || String(err)); }
 }
 
@@ -115,27 +264,27 @@ async function loadKey() {
   }
   if (data?.apiKey) {
     $('apiKey').value = data.apiKey;
-    show('keySuccess', '已读取本机保存的 API Key。');
-  } else show('keyError', '当前电脑还没有保存 API Key。');
+    show('keySuccess', '已读取本机保存的 接口密钥。');
+  } else show('keyError', '当前电脑还没有保存接口密钥。');
 }
 
 async function clearKey() {
-  if (!confirm('确定清除已保存的 API Key 吗？')) return;
+  if (!confirm('确定清除已保存的接口密钥 吗？')) return;
   await window.resumeApp.clearKey();
   $('apiKey').value = '';
-  show('keySuccess', '已清除 API Key。');
+  show('keySuccess', '已清除接口密钥。');
 }
 
 async function initModelSelect() {
   try {
-    deepseekModels = await window.resumeApp.getDeepSeekModels();
+    deepseekModels = await window.resumeApp.get深度求索Models();
   } catch {
     deepseekModels = [
-      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜严谨推理', thinking: 'enabled', note: '默认推荐' },
-      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜快速评分', thinking: 'disabled', note: '适合批量初筛' },
-      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量推理', thinking: 'enabled', note: '更慢、更贵' },
-      { id: 'deepseek-chat', label: 'Legacy deepseek-chat｜兼容快速模式', thinking: '', note: '旧兼容模型名' },
-      { id: 'deepseek-reasoner', label: 'Legacy deepseek-reasoner｜兼容推理模式', thinking: '', note: '旧兼容模型名' }
+      { id: 'deepseek-v4-flash', label: '深度求索第四代极速｜严谨推理', thinking: 'enabled', note: '默认推荐' },
+      { id: 'deepseek-v4-flash', label: '深度求索第四代极速｜快速评分', thinking: 'disabled', note: '适合批量初筛' },
+      { id: 'deepseek-v4-pro', label: '深度求索第四代专业｜高质量推理', thinking: 'enabled', note: '更慢、更贵' },
+      { id: 'deepseek-chat', label: '旧版对话模型｜兼容快速模式', thinking: '', note: '旧兼容模型名' },
+      { id: 'deepseek-reasoner', label: '旧版推理模型｜兼容推理模式', thinking: '', note: '旧兼容模型名' }
     ];
   }
   const select = $('modelSelect');
@@ -198,7 +347,7 @@ function appendEditableRow(containerId, text = '') {
   const input = document.createElement('input');
   input.value = text;
   input.placeholder = containerId === 'mustHaveList'
-    ? '硬条件示例：必须有明确 B2B Sales 经历，且简历中体现 quota/revenue/closing。'
+    ? '硬条件示例：必须有明确 B2B 销售 经历，且简历中体现 销售指标/revenue/成交。'
     : containerId === 'bonusList'
       ? '具体加分示例：有 AWS/Azure/GCP/腾讯云等云厂战略客户销售经验优先。'
       : '强风险示例：不会法语且无法支持法国客户商务沟通。';
@@ -223,22 +372,34 @@ function getEditableItems(containerId) {
 async function saveStandard() {
   const standard = getStandardFromForm();
   if (!standard.mustHave.length) return setStatus('standardStatus', '必要项不能为空。');
+  const p = activeProject();
+  if (p) {
+    p.standard = standard;
+    p.updatedAt = new Date().toISOString();
+  }
+  await persistProjects();
   await window.resumeApp.saveStandard(standard);
-  setStatus('standardStatus', '岗位标准已保存。');
+  setStatus('standardStatus', '当前项目的岗位标准已保存。');
 }
 
 async function loadSavedStandard() {
-  const standard = await window.resumeApp.loadStandard();
-  if (!standard) return setStatus('standardStatus', '当前还没有保存过岗位标准。');
-  setStandardToForm(standard);
-  setStatus('standardStatus', '已读取保存的岗位标准。');
+  const p = activeProject();
+  if (!p?.standard) return setStatus('standardStatus', '当前项目还没有保存过岗位标准。');
+  setStandardToForm(p.standard);
+  setStatus('standardStatus', '已读取当前项目的岗位标准。');
 }
 
 async function restoreDefaultStandard() {
-  if (!confirm('确定恢复默认法国销售岗标准吗？当前修改会被覆盖。')) return;
-  await window.resumeApp.clearStandard();
-  setStandardToForm(await window.resumeApp.getDefaultStandard());
-  setStatus('standardStatus', '已恢复默认法国销售岗标准。');
+  if (!confirm('确定恢复默认岗位标准吗？当前项目内的岗位标准会被覆盖。')) return;
+  const standard = await window.resumeApp.getDefaultStandard();
+  setStandardToForm(standard);
+  const p = activeProject();
+  if (p) {
+    p.standard = standard;
+    p.updatedAt = new Date().toISOString();
+  }
+  await persistProjects();
+  setStatus('standardStatus', '已恢复默认岗位标准。');
 }
 
 async function selectAndParseResume() {
@@ -263,7 +424,7 @@ async function analyze() {
   if (!value('resumeText')) return show('analyzeError', '请先读取或粘贴候选人简历。');
 
   $('analyzeBtn').disabled = true;
-  setStatus('analyzeStatus', 'AI 正在评估简历，并提取原文依据、置信度与风险项……');
+  setStatus('analyzeStatus', '人工智能正在评估简历，并提取原文依据、置信度与风险项……');
 
   try {
     const result = await window.resumeApp.analyze({
@@ -302,14 +463,14 @@ function renderResult(data) {
     大致年龄：<strong>${escapeHtml(ageText)}</strong>${ageConfidence ? `；年龄推断置信度：<strong>${ageConfidence}%</strong>` : ''}<br>
     年龄依据：<span class="muted-line">${escapeHtml(ageBasis)}</span><br>
     综合评分：<strong>${score}/100</strong>；推进建议：<strong>${escapeHtml(data.recommendation)}</strong><br>
-    使用模型：<strong>${escapeHtml(data.modelLabel || data.model || 'DeepSeek')}</strong>；严格度：<strong>${escapeHtml(data.strictnessLabel || (data.strictnessLevel ? data.strictnessLevel + '度' : '3度'))}</strong><br>
+    使用模型：<strong>${escapeHtml(data.modelLabel || data.model || '深度求索')}</strong>；严格度：<strong>${escapeHtml(data.strictnessLabel || (data.strictnessLevel ? data.strictnessLevel + '度' : '3度'))}</strong><br>
     ${escapeHtml(data.summary || '')}`;
 
   $('confidenceText').textContent = `${data.confidence || 0}%`;
   $('uncertaintyReason').textContent = data.dataQuality?.uncertaintyReason || '证据越充分，置信度越高。';
 
   const b = data.scoreBreakdown || {};
-  setText('mSales', b.sales); setText('mIndustry', b.industry); setText('mAccount', b.account); setText('mClosing', b.closing);
+  setText('m销售', b.sales); setText('mIndustry', b.industry); setText('mAccount', b.account); setText('m成交', b.成交);
   setText('mLocation', b.location); setText('mLanguage', b.language); setText('mBonus', b.bonus); setText('mOverall', b.overall);
 
   const u = data.usage || {};
@@ -415,7 +576,7 @@ async function addToLeaderboard(data, showAlert) {
     confidence: Number(data.confidence || 0),
     level: data.level || '',
     recommendation: data.recommendation || '',
-    model: data.modelLabel || data.model || 'DeepSeek',
+    model: data.modelLabel || data.model || '深度求索',
     strictnessLevel: data.strictnessLevel || Number(value('strictnessLevel') || 3),
     strictnessLabel: data.strictnessLabel || (STRICTNESS_TEXT[Number(value('strictnessLevel') || 3)]?.label || '3度｜标准推荐'),
     totalTokens: Number(data.usage?.totalTokens || 0),
@@ -429,6 +590,12 @@ async function addToLeaderboard(data, showAlert) {
   };
   leaderboard.push(item);
   leaderboard.sort((a, b) => b.score - a.score || b.confidence - a.confidence);
+  const p = activeProject();
+  if (p) {
+    p.leaderboard = leaderboard;
+    p.updatedAt = new Date().toISOString();
+  }
+  await persistProjects();
   await window.resumeApp.saveLeaderboard(leaderboard);
   refreshLeaderboardFilters();
   renderLeaderboard();
@@ -473,9 +640,9 @@ function renderLeaderboard() {
     const job = $('rankJobFilter')?.value || '全部岗位';
     const category = $('rankCategoryFilter')?.value || '全部归类';
     const week = $('rankThisWeekOnly')?.checked ? '仅本周' : '全部时间';
-    summary.textContent = `当前显示 ${list.length} / ${total} 位候选人｜岗位：${job}｜归类：${category}｜时间：${week}`;
+    summary.textContent = `当前项目显示 ${list.length} / ${total} 位候选人｜岗位：${job}｜归类：${category}｜时间：${week}`;
   }
-  if (!list.length) { body.innerHTML = '<tr><td colspan="10">暂无符合筛选条件的候选人</td></tr>'; return; }
+  if (!list.length) { body.innerHTML = '<tr><td colspan="10">当前项目暂无符合筛选条件的候选人</td></tr>'; return; }
   list.forEach((x, index) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><span class="rank-num">${index + 1}</span></td>
@@ -487,7 +654,7 @@ function renderLeaderboard() {
           ${['优先推进','建议推进','待复核','作为储备','不建议推进','已联系','已面试','已淘汰'].map(c => `<option value="${c}" ${String(x.category || '') === c ? 'selected' : ''}>${c}</option>`).join('')}
         </select>
       </td>
-      <td>${escapeHtml(x.model || '-')}<br><span class="muted-line">${escapeHtml(x.strictnessLabel || '3度｜标准推荐')}</span><br><span class="muted-line">${Number(x.totalTokens || 0)} Token</span></td>
+      <td>${escapeHtml(x.model || '-')}<br><span class="muted-line">${escapeHtml(x.strictnessLabel || '3度｜标准推荐')}</span><br><span class="muted-line">${Number(x.totalTokens || 0)} 令牌</span></td>
       <td><textarea class="rank-note" data-note="${x.id}" placeholder="添加候选人备注、沟通进展、风险说明……">${escapeHtml(x.note || '')}</textarea></td>
       <td>${escapeHtml(x.time || '')}<br><span class="muted-line">${escapeHtml(x.weekKey || '')}</span></td>
       <td><button class="danger small" data-del="${x.id}">删除</button></td>`;
@@ -498,6 +665,7 @@ function renderLeaderboard() {
     const item = leaderboard.find(x => String(x.id) === String(select.dataset.category));
     if (item) {
       item.category = select.value;
+      await persistProjects();
       await window.resumeApp.saveLeaderboard(leaderboard);
       renderLeaderboard();
     }
@@ -507,6 +675,7 @@ function renderLeaderboard() {
     const item = leaderboard.find(x => String(x.id) === String(area.dataset.note));
     if (item) {
       item.note = area.value.trim();
+      await persistProjects();
       await window.resumeApp.saveLeaderboard(leaderboard);
       renderLeaderboard();
     }
@@ -514,7 +683,14 @@ function renderLeaderboard() {
 
   body.querySelectorAll('[data-del]').forEach(btn => btn.onclick = async () => {
     leaderboard = leaderboard.filter(x => String(x.id) !== String(btn.dataset.del));
+    const p = activeProject();
+    if (p) {
+      p.leaderboard = leaderboard;
+      p.updatedAt = new Date().toISOString();
+    }
+    await persistProjects();
     await window.resumeApp.saveLeaderboard(leaderboard);
+    renderProjectList();
     renderLeaderboard();
   });
 }
@@ -528,22 +704,98 @@ function resetLeaderboardFilters() {
 }
 
 async function clearLeaderboard() {
-  if (!confirm('确定清空排行榜吗？')) return;
+  if (!confirm('确定清空当前项目的排行榜吗？')) return;
   leaderboard = [];
-  await window.resumeApp.clearLeaderboard();
+  const p = activeProject();
+  if (p) {
+    p.leaderboard = [];
+    p.updatedAt = new Date().toISOString();
+  }
+  await persistProjects();
+  await window.resumeApp.saveLeaderboard(leaderboard);
+  renderProjectList();
   renderLeaderboard();
 }
 
+
 function exportCSV() {
   const list = getFilteredLeaderboard();
-  if (!list.length) return alert('当前筛选结果为空。');
-  const rows = [['排名','候选人','大致年龄','年龄推断置信度','年龄推断依据','岗位','归类','备注','分数','置信度','模型','严格度','Token','等级','建议','周次','时间','摘要'], ...list.map((x, i) => [i+1, x.candidateName, x.candidateAge || '', x.ageConfidence || '', x.ageInferenceBasis || '', x.jobTitle || '', x.category || '', x.note || '', x.score, x.confidence, x.model || '', x.strictnessLabel || '', x.totalTokens || 0, x.level, x.recommendation, x.weekKey || '', x.time, x.summary])];
-  const csv = rows.map(r => r.map(c => `"${String(c ?? '').replaceAll('"','""')}"`).join(',')).join('\n');
+  if (!list.length) return alert('当前项目的筛选结果为空。');
+  const rows = [
+    ['排名','项目','候选人','大致年龄','年龄推断置信度','年龄推断依据','岗位','归类','备注','分数','置信度','模型','严格度','令牌用量','等级','建议','周次','时间','摘要'],
+    ...list.map((x, i) => [
+      i + 1,
+      activeProject()?.name || '',
+      x.candidateName || '',
+      x.candidateAge || '',
+      x.ageConfidence || '',
+      x.ageInferenceBasis || '',
+      x.jobTitle || '',
+      x.category || '',
+      x.note || '',
+      x.score || 0,
+      x.confidence || 0,
+      x.model || '',
+      x.strictnessLabel || '',
+      x.totalTokens || 0,
+      x.level || '',
+      x.recommendation || '',
+      x.weekKey || '',
+      x.time || '',
+      x.summary || ''
+    ])
+  ];
+  const csv = rows.map(row => row.map(c => `"${String(c ?? '').replaceAll('"','""')}"`).join(',')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
-  const job = $('rankJobFilter')?.value || 'all-jobs';
-  a.href = url; a.download = `candidate_leaderboard_${job}_${new Date().toISOString().slice(0,10)}.csv`; a.click();
+  const projectName = sanitizeFilename(activeProject()?.name || '当前项目');
+  a.href = url;
+  a.download = `排行榜_${projectName}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+
+function sanitizeFilename(name) {
+  return String(name || '未命名').replace(/[\\/:*?"<>|]/g, '_').slice(0, 60);
+}
+
+function exportAllProjectsCSV() {
+  if (!projects.length) return alert('暂无项目。');
+  const rows = [['项目','项目内排名','候选人','大致年龄','年龄推断置信度','年龄推断依据','岗位','归类','备注','分数','置信度','模型','严格度','令牌用量','等级','建议','周次','时间','摘要']];
+  projects.forEach(project => {
+    const items = migrateLeaderboard(project.leaderboard || []).sort((a, b) => b.score - a.score || b.confidence - a.confidence);
+    items.forEach((x, i) => rows.push([
+      project.name || '未命名项目',
+      i + 1,
+      x.candidateName || '',
+      x.candidateAge || '',
+      x.ageConfidence || '',
+      x.ageInferenceBasis || '',
+      x.jobTitle || '',
+      x.category || '',
+      x.note || '',
+      x.score || 0,
+      x.confidence || 0,
+      x.model || '',
+      x.strictnessLabel || '',
+      x.totalTokens || 0,
+      x.level || '',
+      x.recommendation || '',
+      x.weekKey || '',
+      x.time || '',
+      x.summary || ''
+    ]));
+  });
+  if (rows.length === 1) return alert('全部项目中暂无候选人。');
+  const csv = rows.map(row => row.map(c => `"${String(c ?? '').replaceAll('"','""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `全部项目排行榜_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
   URL.revokeObjectURL(url);
 }
 
@@ -554,7 +806,7 @@ async function exportBackup() {
 
   const includeApiKey = Boolean($('includeApiKeyBackup')?.checked);
   if (includeApiKey) {
-    const ok = confirm('你选择了导出 API Key。备份文件将包含敏感信息，请不要发给别人。确定继续吗？');
+    const ok = confirm('你选择了导出接口密钥。备份文件将包含敏感信息，请不要发给别人。确定继续吗？');
     if (!ok) {
       setStatus('backupStatus', '已取消导出。');
       return;
@@ -562,6 +814,7 @@ async function exportBackup() {
   }
 
   try {
+    await persistProjects();
     const result = await window.resumeApp.exportBackup({ includeApiKey });
     if (result?.canceled) {
       setStatus('backupStatus', '已取消导出。');
@@ -570,7 +823,7 @@ async function exportBackup() {
 
     show(
       'backupSuccess',
-      `备份已导出：${result.filePath}。排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已包含' : '未保存'}，API Key：${result.apiKeyIncluded ? '已包含' : '未包含'}。`
+      `备份已导出：${result.filePath}。项目 ${result.projectCount || projects.length || 0} 个，当前旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已包含' : '未保存'}，接口密钥：${result.apiKeyIncluded ? '已包含' : '未包含'}。`
     );
     setStatus('backupStatus', '');
   } catch (err) {
@@ -582,7 +835,7 @@ async function exportBackup() {
 async function importBackup() {
   hideMessages(['backupSuccess', 'backupError']);
 
-  const ok = confirm('导入备份会覆盖当前岗位标准、排行榜和部分本地设置。若备份文件不包含 API Key，系统会保留当前电脑已保存的 API Key。确定继续吗？');
+  const ok = confirm('导入备份会覆盖当前岗位标准、排行榜和部分本地设置。若备份文件不包含接口密钥，系统会保留当前电脑已保存的接口密钥。确定继续吗？');
   if (!ok) return;
 
   setStatus('backupStatus', '正在导入备份……');
@@ -598,7 +851,7 @@ async function importBackup() {
 
     show(
       'backupSuccess',
-      `备份导入完成。排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已恢复' : '未包含'}，API Key：${result.apiKeyImported ? '已导入' : (result.apiKeyPreserved ? '已保留当前电脑原 Key' : '未包含')}。`
+      `备份导入完成。项目 ${result.projectCount || projects.length || 0} 个，旧版排行榜记录 ${result.leaderboardCount || 0} 条，岗位标准：${result.hasStandard ? '已恢复' : '未包含'}，接口密钥：${result.apiKeyImported ? '已导入' : (result.apiKeyPreserved ? '已保留当前电脑原密钥' : '未包含')}。`
     );
     setStatus('backupStatus', '');
   } catch (err) {
@@ -608,7 +861,7 @@ async function importBackup() {
 }
 
 function fillNotes() {
-  $('extraNotes').value = '请严格判断候选人是否是真正 Sales，而不是售前或客户成功；法语、英语、巴黎/法国 base 是关键必要项；云厂背景、Retail/Telecom/eCommerce/Gaming 经验优先。所有判断必须引用简历原文依据，证据不足请写待核实。';
+  $('extraNotes').value = '请严格判断候选人是否是真正销售，而不是售前或客户成功；法语、英语、巴黎或法国常驻是关键必要项；云厂背景、零售、电信、电商、游戏经验优先。所有判断必须引用简历原文依据，证据不足请写待核实。';
 }
 
 function renderList(id, items) {

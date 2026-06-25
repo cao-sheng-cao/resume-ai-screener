@@ -16,6 +16,10 @@ contextBridge.exposeInMainWorld('resumeApp', {
   loadLeaderboard: () => ipcRenderer.invoke('leaderboard:load'),
   saveLeaderboard: (items) => ipcRenderer.invoke('leaderboard:save', items),
   clearLeaderboard: () => ipcRenderer.invoke('leaderboard:clear'),
+  loadProjects: () => ipcRenderer.invoke('projects:load'),
+  saveProjects: (projects) => ipcRenderer.invoke('projects:save', projects),
+  getActiveProjectId: () => ipcRenderer.invoke('projects:get-active'),
+  saveActiveProjectId: (projectId) => ipcRenderer.invoke('projects:save-active', projectId),
   exportBackup: (options) => ipcRenderer.invoke('backup:export', options),
   importBackup: () => ipcRenderer.invoke('backup:import'),
   openDataFolder: () => ipcRenderer.invoke('app:open-data-folder')
