@@ -600,17 +600,54 @@ function renderResult(data) {
 
 function renderChecks(id, items) {
   const box = $(id);
+  if (!box) return;
   box.innerHTML = '';
   const arr = Array.isArray(items) ? items : [];
-  if (!arr.length) { box.innerHTML = '<div class="check-row">暂无</div>'; return; }
-  arr.forEach(x => {
+  updateCheckCount(id, arr);
+
+  if (!arr.length) {
+    box.innerHTML = '<div class="check-row empty">暂无检查结果</div>';
+    return;
+  }
+
+  arr.forEach((x, idx) => {
+    const status = String(x.status || '待核实');
     const row = document.createElement('div');
-    row.className = 'check-row';
-    row.innerHTML = `<div class="check-top"><strong>${escapeHtml(x.item || '')}</strong><span class="badge ${badgeClass(x.status)}">${escapeHtml(x.status || '待核实')}</span></div>
+    row.className = `check-row check-status-${badgeClass(status)}`;
+    row.innerHTML = `
+      <div class="check-top">
+        <strong>${idx + 1}. ${escapeHtml(x.item || '')}</strong>
+        <span class="badge ${badgeClass(status)}">${escapeHtml(status)}</span>
+      </div>
       <div class="evidence"><strong>依据：</strong>${escapeHtml(x.evidence || '无明确证据')}</div>
-      <div class="reason"><strong>原因：</strong>${escapeHtml(x.reason || '')} ｜置信度 ${Number(x.confidence || 0)}%</div>`;
+      <div class="reason"><strong>原因：</strong>${escapeHtml(x.reason || '')} ｜置信度 <strong>${Number(x.confidence || 0)}%</strong></div>
+    `;
     box.appendChild(row);
   });
+}
+
+function updateCheckCount(id, items) {
+  const map = {
+    mustHaveResult: 'mustHaveCount',
+    bonusResult: 'bonusCount',
+    vetoResult: 'vetoCount'
+  };
+  const target = $(map[id]);
+  if (!target) return;
+
+  const arr = Array.isArray(items) ? items : [];
+  if (!arr.length) {
+    target.textContent = '暂无结果';
+    return;
+  }
+
+  const parts = {};
+  arr.forEach(x => {
+    const s = String(x.status || '待核实');
+    parts[s] = (parts[s] || 0) + 1;
+  });
+
+  target.textContent = Object.entries(parts).map(([k, v]) => `${k}${v}项`).join('｜');
 }
 
 function badgeClass(status) {
@@ -745,6 +782,10 @@ function renderLeaderboard() {
     const category = $('rankCategoryFilter')?.value || '全部归类';
     const week = $('rankThisWeekOnly')?.checked ? '仅本周' : '全部时间';
     summary.textContent = `当前项目显示 ${list.length} / ${total} 位候选人｜岗位：${job}｜归类：${category}｜时间：${week}`;
+  }
+  const toggleHint = $('rankToggleHint');
+  if (toggleHint) {
+    toggleHint.textContent = `当前显示 ${list.length} / ${total} 位候选人`;
   }
   if (!list.length) { body.innerHTML = '<tr><td colspan="10">当前项目暂无符合筛选条件的候选人</td></tr>'; return; }
   list.forEach((x, index) => {

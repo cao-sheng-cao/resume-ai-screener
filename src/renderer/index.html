@@ -252,10 +252,28 @@
         </div>
 
         <div class="two-grid checks">
-          <div class="check-list"><h3>必要项检查</h3><div id="mustHaveResult"></div></div>
-          <div class="check-list"><h3>加分项检查</h3><div id="bonusResult"></div></div>
+          <details class="check-list collapsible-check" open>
+            <summary>
+              <span>必要项检查</span>
+              <small id="mustHaveCount">待生成</small>
+            </summary>
+            <div id="mustHaveResult"></div>
+          </details>
+          <details class="check-list collapsible-check">
+            <summary>
+              <span>加分项检查</span>
+              <small id="bonusCount">待生成</small>
+            </summary>
+            <div id="bonusResult"></div>
+          </details>
         </div>
-        <div class="check-list"><h3>一票否决 / 强风险检查</h3><div id="vetoResult"></div></div>
+        <details class="check-list collapsible-check">
+          <summary>
+            <span>一票否决 / 强风险检查</span>
+            <small id="vetoCount">待生成</small>
+          </summary>
+          <div id="vetoResult"></div>
+        </details>
 
         <div class="two-grid cards-grid">
           <div class="mini-card"><h3>匹配点</h3><ul id="matchedPoints"></ul></div>
@@ -271,7 +289,7 @@
         <div class="section-title">
           <div>
             <h2>5. 候选人排行榜</h2>
-            <p>按岗位、时间、归类筛选候选人，并可为每位候选人添加备注，适合按周维护不同岗位的人才池。</p>
+            <p>按岗位、时间、归类筛选候选人，并可为每位候选人添加备注。排行榜默认展开，也可以折叠减少页面长度。</p>
           </div>
           <div class="actions no-margin">
             <button class="ghost" id="exportCsvBtn">导出当前项目排行榜</button>
@@ -279,57 +297,65 @@
             <button class="danger" id="clearRankBtn">清空</button>
           </div>
         </div>
-        
-        <div class="filter-card">
-          <div class="filter-grid">
-            <div>
-              <label>按岗位筛选</label>
-              <select id="rankJobFilter"><option value="">全部岗位</option></select>
+
+        <details class="leaderboard-collapse" open>
+          <summary>
+            <span>展开 / 收起排行榜</span>
+            <small id="rankToggleHint">默认展开，可收起减少页面长度</small>
+          </summary>
+
+          <div class="filter-card">
+            <div class="filter-grid">
+              <div>
+                <label>按岗位筛选</label>
+                <select id="rankJobFilter"><option value="">全部岗位</option></select>
+              </div>
+              <div>
+                <label>按归类筛选</label>
+                <select id="rankCategoryFilter">
+                  <option value="">全部归类</option>
+                  <option value="优先推进">优先推进</option>
+                  <option value="建议推进">建议推进</option>
+                  <option value="待复核">待复核</option>
+                  <option value="作为储备">作为储备</option>
+                  <option value="不建议推进">不建议推进</option>
+                  <option value="已联系">已联系</option>
+                  <option value="已面试">已面试</option>
+                  <option value="已淘汰">已淘汰</option>
+                </select>
+              </div>
+              <div>
+                <label>关键词搜索</label>
+                <input id="rankKeywordFilter" placeholder="搜索姓名、备注、摘要" />
+              </div>
+              <div class="week-filter">
+                <label>时间范围</label>
+                <label class="inline-check compact"><input id="rankThisWeekOnly" type="checkbox" /> <span>只看本周加入</span></label>
+              </div>
             </div>
-            <div>
-              <label>按归类筛选</label>
-              <select id="rankCategoryFilter">
-                <option value="">全部归类</option>
-                <option value="优先推进">优先推进</option>
-                <option value="建议推进">建议推进</option>
-                <option value="待复核">待复核</option>
-                <option value="作为储备">作为储备</option>
-                <option value="不建议推进">不建议推进</option>
-                <option value="已联系">已联系</option>
-                <option value="已面试">已面试</option>
-                <option value="已淘汰">已淘汰</option>
-              </select>
-            </div>
-            <div>
-              <label>关键词搜索</label>
-              <input id="rankKeywordFilter" placeholder="搜索姓名、备注、摘要" />
-            </div>
-            <div class="week-filter">
-              <label>时间范围</label>
-              <label class="inline-check compact"><input id="rankThisWeekOnly" type="checkbox" /> <span>只看本周加入</span></label>
-            </div>
+            <div class="rank-summary" id="rankSummary">当前显示当前项目内的候选人。</div>
           </div>
-          <div class="rank-summary" id="rankSummary">当前显示当前项目内的候选人。</div>
-        </div>
-        <div class="table-wrap">
-          <table>
-            <thead>
-              <tr>
-                <th>排名</th>
-                <th>候选人 / 大致年龄</th>
-                <th>分数</th>
-                <th>置信度</th>
-                <th>岗位</th>
-                <th>归类</th>
-                <th>模型 / 令牌</th>
-                <th>备注</th>
-                <th>时间</th>
-                <th>操作</th>
-              </tr>
-            </thead>
-            <tbody id="leaderboardBody"></tbody>
-          </table>
-        </div>
+
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>排名</th>
+                  <th>候选人 / 大致年龄</th>
+                  <th>分数</th>
+                  <th>置信度</th>
+                  <th>岗位</th>
+                  <th>归类</th>
+                  <th>模型 / 令牌</th>
+                  <th>备注</th>
+                  <th>时间</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody id="leaderboardBody"></tbody>
+            </table>
+          </div>
+        </details>
       </section>
 
 

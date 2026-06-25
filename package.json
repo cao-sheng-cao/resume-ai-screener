@@ -1,7 +1,7 @@
 {
   "name": "resume-ai-screener-electron",
-  "version": "1.0.12",
-  "description": "本地简历岗位匹配评分系统：修复项目新增/改名交互与 PDF 简历读取问题。",
+  "version": "1.0.13",
+  "description": "本地简历岗位匹配评分系统：新增检查结果折叠展开、状态强调和排行榜折叠展开。",
   "main": "main.js",
   "author": "Resume AI Screener",
   "license": "MIT",
