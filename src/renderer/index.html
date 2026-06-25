@@ -64,6 +64,16 @@
           <button class="ghost" id="loadKeyBtn">读取已保存 Key</button>
           <button class="danger" id="clearKeyBtn">清除 Key</button>
         </div>
+
+        <div class="model-box">
+          <div>
+            <label>DeepSeek 模型选择</label>
+            <select id="modelSelect"></select>
+            <p class="hint" id="modelInfo">快速模式适合批量初筛，推理模式适合重点候选人复核。</p>
+          </div>
+          <button class="ghost" id="saveModelBtn">保存模型选择</button>
+        </div>
+
         <div class="message success" id="keySuccess"></div>
         <div class="message error" id="keyError"></div>
       </section>
@@ -191,6 +201,16 @@
           <div><span>综合</span><strong id="mOverall">0</strong></div>
         </div>
 
+        <div class="token-panel">
+          <div><span>本次模型</span><strong id="usedModel">-</strong></div>
+          <div><span>输入 Token</span><strong id="promptTokens">0</strong></div>
+          <div><span>输出 Token</span><strong id="completionTokens">0</strong></div>
+          <div><span>总 Token</span><strong id="totalTokens">0</strong></div>
+          <div><span>缓存命中</span><strong id="cacheHitTokens">0</strong></div>
+          <div><span>缓存未命中</span><strong id="cacheMissTokens">0</strong></div>
+          <div><span>推理 Token</span><strong id="reasoningTokens">0</strong></div>
+        </div>
+
         <div class="two-grid checks">
           <div class="check-list"><h3>必要项检查</h3><div id="mustHaveResult"></div></div>
           <div class="check-list"><h3>加分项检查</h3><div id="bonusResult"></div></div>
@@ -226,6 +246,8 @@
                 <th>候选人</th>
                 <th>分数</th>
                 <th>置信度</th>
+                <th>模型</th>
+                <th>Token</th>
                 <th>等级</th>
                 <th>建议</th>
                 <th>时间</th>

@@ -1,25 +1,20 @@
-GitHub Actions 云端自动打包说明
+使用说明 v1.0.2
 
-这个版本已经内置：
-.github/workflows/build-windows.yml
+本版本新增模型选择和 Token 消耗显示。
 
-你把整个项目上传到 GitHub 后，GitHub 会自动在云端生成 Windows 安装包。
+上传 GitHub：
+1. 把 package.json、main.js、src、.github、README.md 上传到仓库根目录。
+2. 进入 Actions。
+3. 运行 Build Windows Installer。
+4. 成功后下载 Artifacts 里的 Resume-AI-Screener-Windows-Installer。
 
-最简流程：
-1. 登录 GitHub。
-2. 新建仓库，例如 resume-ai-screener。
-3. 上传本项目所有文件和文件夹，必须包含 .github/workflows/build-windows.yml。
-4. 进入仓库的 Actions 页面。
-5. 点击 Build Windows Installer。
-6. 点击 Run workflow。
-7. 等待 5-15 分钟。
-8. 打包完成后，进入本次运行记录，在 Artifacts 区域下载 Resume-AI-Screener-Windows-Installer。
-9. 解压下载的 artifact，即可看到 Setup.exe 安装包。
+使用应用：
+1. 打开软件。
+2. 输入 DeepSeek API Key。
+3. 选择模型：快速模式适合批量筛选，推理模式适合重点候选人复核。
+4. 设置岗位标准。
+5. 上传简历。
+6. 点击评分。
+7. 查看评分结果、置信度、证据、Token 消耗和排行榜。
 
-注意：
-- 不要把 DeepSeek API Key 上传到 GitHub。
-- 最终用户第一次打开软件时，在软件里输入自己的 API Key。
-- 未签名的 Windows 安装包可能会被 Windows 提示“未知发布者”，这是正常现象；商业分发需要购买代码签名证书。
-
-
-重要修复：本版本已修复 app.asar 中找不到 src/main/main.js 的打包错误。请上传所有文件到 GitHub 仓库根目录，尤其不要漏掉 main.js 和 src 文件夹。
+不要上传或公开你的 API Key。

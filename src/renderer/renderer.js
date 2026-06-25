@@ -1,5 +1,6 @@
 let currentResult = null;
 let leaderboard = [];
+let deepseekModels = [];
 
 const $ = (id) => document.getElementById(id);
 
@@ -12,6 +13,8 @@ function bindEvents() {
   $('saveKeyBtn').onclick = saveKey;
   $('loadKeyBtn').onclick = loadKey;
   $('clearKeyBtn').onclick = clearKey;
+  $('saveModelBtn').onclick = saveModelChoice;
+  $('modelSelect').onchange = updateModelInfo;
   $('toggleKeyBtn').onclick = () => $('apiKey').type = $('apiKey').type === 'password' ? 'text' : 'password';
   $('openDataFolderBtn').onclick = () => window.resumeApp.openDataFolder();
 
@@ -30,11 +33,16 @@ function bindEvents() {
 }
 
 async function initApp() {
+  await initModelSelect();
   const savedStandard = await window.resumeApp.loadStandard();
   if (savedStandard) setStandardToForm(savedStandard);
   else setStandardToForm(await window.resumeApp.getDefaultStandard());
 
   const key = await window.resumeApp.loadKey();
+  if (key?.modelKey) {
+    $('modelSelect').value = key.modelKey;
+    updateModelInfo();
+  }
   if (key?.apiKey) {
     $('apiKey').value = key.apiKey;
     show('keySuccess', '已读取本机保存的 API Key。');
@@ -55,6 +63,10 @@ async function saveKey() {
 async function loadKey() {
   hideMessages(['keySuccess', 'keyError']);
   const data = await window.resumeApp.loadKey();
+  if (data?.modelKey) {
+    $('modelSelect').value = data.modelKey;
+    updateModelInfo();
+  }
   if (data?.apiKey) {
     $('apiKey').value = data.apiKey;
     show('keySuccess', '已读取本机保存的 API Key。');
@@ -66,6 +78,45 @@ async function clearKey() {
   await window.resumeApp.clearKey();
   $('apiKey').value = '';
   show('keySuccess', '已清除 API Key。');
+}
+
+async function initModelSelect() {
+  try {
+    deepseekModels = await window.resumeApp.getDeepSeekModels();
+  } catch {
+    deepseekModels = [
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜严谨推理', thinking: 'enabled', note: '默认推荐' },
+      { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜快速评分', thinking: 'disabled', note: '适合批量初筛' },
+      { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量推理', thinking: 'enabled', note: '更慢、更贵' },
+      { id: 'deepseek-chat', label: 'Legacy deepseek-chat｜兼容快速模式', thinking: '', note: '旧兼容模型名' },
+      { id: 'deepseek-reasoner', label: 'Legacy deepseek-reasoner｜兼容推理模式', thinking: '', note: '旧兼容模型名' }
+    ];
+  }
+  const select = $('modelSelect');
+  select.innerHTML = '';
+  deepseekModels.forEach(m => {
+    const opt = document.createElement('option');
+    opt.value = `${m.id}:${m.thinking || ''}`;
+    opt.textContent = m.label;
+    select.appendChild(opt);
+  });
+  select.value = 'deepseek-v4-flash:enabled';
+  updateModelInfo();
+}
+
+function updateModelInfo() {
+  const key = $('modelSelect').value;
+  const m = deepseekModels.find(x => `${x.id}:${x.thinking || ''}` === key);
+  $('modelInfo').textContent = m ? `${m.note}。实际调用：${m.id}${m.thinking ? ' / thinking=' + m.thinking : ''}` : '当前模型配置将随评分请求一起发送。';
+}
+
+async function saveModelChoice() {
+  try {
+    await window.resumeApp.saveModel($('modelSelect').value);
+    show('keySuccess', '模型选择已保存。');
+  } catch (err) {
+    show('keyError', err.message || String(err));
+  }
 }
 
 function setStandardToForm(data) {
@@ -171,6 +222,7 @@ async function analyze() {
   try {
     const result = await window.resumeApp.analyze({
       apiKey: value('apiKey'),
+      modelKey: value('modelSelect'),
       passLine: Number(value('passLine') || 75),
       extraNotes: value('extraNotes'),
       resumeText: value('resumeText'),
@@ -197,6 +249,7 @@ function renderResult(data) {
 
   $('summaryBox').innerHTML = `<strong>${escapeHtml(data.candidateName)}｜${escapeHtml(data.level)}</strong><br>
     综合评分：<strong>${score}/100</strong>；推进建议：<strong>${escapeHtml(data.recommendation)}</strong><br>
+    使用模型：<strong>${escapeHtml(data.modelLabel || data.model || 'DeepSeek')}</strong><br>
     ${escapeHtml(data.summary || '')}`;
 
   $('confidenceText').textContent = `${data.confidence || 0}%`;
@@ -205,6 +258,15 @@ function renderResult(data) {
   const b = data.scoreBreakdown || {};
   setText('mSales', b.sales); setText('mIndustry', b.industry); setText('mAccount', b.account); setText('mClosing', b.closing);
   setText('mLocation', b.location); setText('mLanguage', b.language); setText('mBonus', b.bonus); setText('mOverall', b.overall);
+
+  const u = data.usage || {};
+  setText('usedModel', data.modelLabel || data.model || '-');
+  setText('promptTokens', u.promptTokens || 0);
+  setText('completionTokens', u.completionTokens || 0);
+  setText('totalTokens', u.totalTokens || 0);
+  setText('cacheHitTokens', u.cacheHitTokens || 0);
+  setText('cacheMissTokens', u.cacheMissTokens || 0);
+  setText('reasoningTokens', u.reasoningTokens || 0);
 
   renderChecks('mustHaveResult', data.mustHaveCheck);
   renderChecks('bonusResult', data.bonusCheck);
@@ -250,6 +312,8 @@ async function addToLeaderboard(data, showAlert) {
     confidence: Number(data.confidence || 0),
     level: data.level || '',
     recommendation: data.recommendation || '',
+    model: data.modelLabel || data.model || 'DeepSeek',
+    totalTokens: Number(data.usage?.totalTokens || 0),
     summary: data.summary || '',
     time: new Date().toLocaleString()
   };
@@ -264,13 +328,15 @@ function renderLeaderboard() {
   const body = $('leaderboardBody');
   body.innerHTML = '';
   leaderboard.sort((a, b) => b.score - a.score || b.confidence - a.confidence);
-  if (!leaderboard.length) { body.innerHTML = '<tr><td colspan="8">暂无候选人评分记录</td></tr>'; return; }
+  if (!leaderboard.length) { body.innerHTML = '<tr><td colspan="10">暂无候选人评分记录</td></tr>'; return; }
   leaderboard.forEach((x, index) => {
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><span class="rank-num">${index + 1}</span></td>
       <td><strong>${escapeHtml(x.candidateName)}</strong><br><span style="color:#64748b">${escapeHtml(x.summary || '')}</span></td>
       <td><strong>${x.score}</strong></td>
       <td>${x.confidence}%</td>
+      <td>${escapeHtml(x.model || '-')}</td>
+      <td>${Number(x.totalTokens || 0)}</td>
       <td>${escapeHtml(x.level)}</td>
       <td>${escapeHtml(x.recommendation)}</td>
       <td>${escapeHtml(x.time)}</td>
@@ -293,7 +359,7 @@ async function clearLeaderboard() {
 
 function exportCSV() {
   if (!leaderboard.length) return alert('排行榜为空。');
-  const rows = [['排名','候选人','分数','置信度','等级','建议','时间','摘要'], ...leaderboard.map((x, i) => [i+1, x.candidateName, x.score, x.confidence, x.level, x.recommendation, x.time, x.summary])];
+  const rows = [['排名','候选人','分数','置信度','模型','Token','等级','建议','时间','摘要'], ...leaderboard.map((x, i) => [i+1, x.candidateName, x.score, x.confidence, x.model || '', x.totalTokens || 0, x.level, x.recommendation, x.time, x.summary])];
   const csv = rows.map(r => r.map(c => `"${String(c ?? '').replaceAll('"','""')}"`).join(',')).join('\n');
   const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

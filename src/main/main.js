@@ -125,6 +125,37 @@ function arr(value) {
   return Array.isArray(value) ? value.map(String) : [];
 }
 
+function normalizeUsage(usage) {
+  const u = usage || {};
+  const details = u.completion_tokens_details || {};
+  return {
+    promptTokens: Number(u.prompt_tokens || 0),
+    completionTokens: Number(u.completion_tokens || 0),
+    totalTokens: Number(u.total_tokens || 0),
+    cacheHitTokens: Number(u.prompt_cache_hit_tokens || 0),
+    cacheMissTokens: Number(u.prompt_cache_miss_tokens || 0),
+    reasoningTokens: Number(details.reasoning_tokens || 0)
+  };
+}
+
+const DEEPSEEK_MODELS = [
+  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜快速评分', thinking: 'disabled', note: '速度快、成本低，适合批量初筛' },
+  { id: 'deepseek-v4-flash', label: 'DeepSeek V4 Flash｜严谨推理', thinking: 'enabled', note: '默认推荐的严谨模式，适合重点候选人复核' },
+  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量评分', thinking: 'disabled', note: '质量更高、成本更高' },
+  { id: 'deepseek-v4-pro', label: 'DeepSeek V4 Pro｜高质量推理', thinking: 'enabled', note: '最严谨但更慢、更贵' },
+  { id: 'deepseek-chat', label: 'Legacy deepseek-chat｜兼容快速模式', thinking: '', note: '旧兼容模型名，对应非思考模式' },
+  { id: 'deepseek-reasoner', label: 'Legacy deepseek-reasoner｜兼容推理模式', thinking: '', note: '旧兼容模型名，对应思考模式' }
+];
+
+function getModelConfig(modelKey) {
+  const key = String(modelKey || 'deepseek-v4-flash:enabled');
+  const [id, thinking = ''] = key.split(':');
+  const found = DEEPSEEK_MODELS.find(m => m.id === id && String(m.thinking || '') === thinking);
+  if (found) return found;
+  if (id) return { id, label: id, thinking, note: '自定义模型' };
+  return DEEPSEEK_MODELS[1];
+}
+
 function normalizeChecks(value) {
   if (!Array.isArray(value)) return [];
   return value.map(x => ({
@@ -187,7 +218,10 @@ function normalizeResult(data, passLine) {
       bonus: clamp(data?.scoreBreakdown?.bonus ?? 0, 0, 100),
       overall: clamp(data?.scoreBreakdown?.overall ?? score, 0, 100)
     },
-    model: data?.model || 'deepseek-chat',
+    model: data?.model || 'deepseek-v4-flash',
+    modelLabel: data?.modelLabel || data?.model || 'DeepSeek',
+    thinkingMode: data?.thinkingMode || '',
+    usage: normalizeUsage(data?.usage),
     createdAt: new Date().toISOString()
   };
 }
@@ -312,9 +346,11 @@ ipcMain.handle('app:get-default-standard', () => ({
   ]
 }));
 
+ipcMain.handle('app:get-deepseek-models', () => DEEPSEEK_MODELS);
+
 ipcMain.handle('settings:load-key', () => {
   const settings = readJson('settings.json', {});
-  return { apiKey: settings.apiKey || '' };
+  return { apiKey: settings.apiKey || '', modelKey: settings.modelKey || 'deepseek-v4-flash:enabled' };
 });
 
 ipcMain.handle('settings:save-key', (event, apiKey) => {
@@ -330,6 +366,13 @@ ipcMain.handle('settings:save-key', (event, apiKey) => {
 ipcMain.handle('settings:clear-key', () => {
   const settings = readJson('settings.json', {});
   delete settings.apiKey;
+  writeJson('settings.json', settings);
+  return { ok: true };
+});
+
+ipcMain.handle('settings:save-model', (event, modelKey) => {
+  const settings = readJson('settings.json', {});
+  settings.modelKey = String(modelKey || 'deepseek-v4-flash:enabled');
   writeJson('settings.json', settings);
   return { ok: true };
 });
@@ -381,25 +424,36 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
   const passLine = Number(payload.passLine || 75);
   const prompt = buildPrompt({ ...payload, resumeText, passLine });
 
+  const modelKey = String(payload.modelKey || settings.modelKey || 'deepseek-v4-flash:enabled');
+  const modelConfig = getModelConfig(modelKey);
+  settings.modelKey = modelKey;
+  writeJson('settings.json', settings);
+
+  const requestBody = {
+    model: modelConfig.id,
+    messages: [
+      {
+        role: 'system',
+        content: '你是严谨的中文招聘评估助手。你必须只输出合法 JSON，不要输出 Markdown，不要输出多余解释。'
+      },
+      { role: 'user', content: prompt }
+    ],
+    temperature: 0.2,
+    stream: false,
+    response_format: { type: 'json_object' }
+  };
+
+  if (modelConfig.thinking === 'enabled' || modelConfig.thinking === 'disabled') {
+    requestBody.thinking = { type: modelConfig.thinking };
+  }
+
   const response = await fetch('https://api.deepseek.com/chat/completions', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       'Authorization': 'Bearer ' + apiKey
     },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        {
-          role: 'system',
-          content: '你是严谨的中文招聘评估助手。你必须只输出合法 JSON，不要输出 Markdown，不要输出多余解释。'
-        },
-        { role: 'user', content: prompt }
-      ],
-      temperature: 0.2,
-      stream: false,
-      response_format: { type: 'json_object' }
-    })
+    body: JSON.stringify(requestBody)
   });
 
   const raw = await response.text();
@@ -410,5 +464,11 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
   const data = JSON.parse(raw);
   const content = data.choices?.[0]?.message?.content || '';
   const parsed = parseModelJson(content);
-  return normalizeResult({ ...parsed, model: 'deepseek-chat' }, passLine);
+  return normalizeResult({
+    ...parsed,
+    model: data.model || modelConfig.id,
+    modelLabel: modelConfig.label,
+    thinkingMode: modelConfig.thinking || '',
+    usage: data.usage || {}
+  }, passLine);
 });
