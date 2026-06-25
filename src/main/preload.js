@@ -7,6 +7,7 @@ contextBridge.exposeInMainWorld('resumeApp', {
   saveKey: (apiKey) => ipcRenderer.invoke('settings:save-key', apiKey),
   clearKey: () => ipcRenderer.invoke('settings:clear-key'),
   saveModel: (modelKey) => ipcRenderer.invoke('settings:save-model', modelKey),
+  saveStrictness: (level) => ipcRenderer.invoke('settings:save-strictness', level),
   loadStandard: () => ipcRenderer.invoke('standard:load'),
   saveStandard: (standard) => ipcRenderer.invoke('standard:save', standard),
   clearStandard: () => ipcRenderer.invoke('standard:clear'),
@@ -15,5 +16,7 @@ contextBridge.exposeInMainWorld('resumeApp', {
   loadLeaderboard: () => ipcRenderer.invoke('leaderboard:load'),
   saveLeaderboard: (items) => ipcRenderer.invoke('leaderboard:save', items),
   clearLeaderboard: () => ipcRenderer.invoke('leaderboard:clear'),
+  exportBackup: (options) => ipcRenderer.invoke('backup:export', options),
+  importBackup: () => ipcRenderer.invoke('backup:import'),
   openDataFolder: () => ipcRenderer.invoke('app:open-data-folder')
 });

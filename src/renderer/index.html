@@ -23,6 +23,7 @@
         <a href="#resume">简历评分</a>
         <a href="#result">评估结果</a>
         <a href="#leaderboard">排行榜</a>
+        <a href="#backup">数据备份</a>
       </nav>
       <div class="side-note">
         <strong>可靠性增强</strong>
@@ -40,7 +41,7 @@
         <div class="hero-card">
           <span>Score</span>
           <strong>0-100</strong>
-          <small>AI 初筛 + 人工复核</small>
+          <small>智能初筛 · 人才池</small>
         </div>
       </section>
 
@@ -72,6 +73,30 @@
             <p class="hint" id="modelInfo">快速模式适合批量初筛，推理模式适合重点候选人复核。</p>
           </div>
           <button class="ghost" id="saveModelBtn">保存模型选择</button>
+        </div>
+
+
+
+        <div class="strictness-card">
+          <div class="strictness-head">
+            <div>
+              <label>AI 判断严格程度</label>
+              <p class="hint">1度最宽松，适合拓展人才池；5度最严格，适合终面前硬筛或高价值岗位。</p>
+            </div>
+            <div class="strictness-value" id="strictnessBadge">3度｜标准推荐</div>
+          </div>
+          <input id="strictnessLevel" type="range" min="1" max="5" step="1" value="3" />
+          <div class="strictness-scale">
+            <span>1 宽松</span><span>2</span><span>3 标准</span><span>4</span><span>5 极严格</span>
+          </div>
+          <div class="strictness-info" id="strictnessInfo"></div>
+          <div class="strictness-examples">
+            <strong>同一种情况参考：</strong>
+            <div id="strictnessExample">例如候选人有云生态合作经验，但没有明确写直接云产品销售：3度会判为“云背景部分满足，直接云销售与 closing 待核实”。</div>
+          </div>
+          <div class="actions no-margin">
+            <button class="ghost" id="saveStrictnessBtn">保存严格度</button>
+          </div>
         </div>
 
         <div class="message success" id="keySuccess"></div>
@@ -175,7 +200,7 @@
         <div class="section-title">
           <div>
             <h2>4. 评估结果</h2>
-            <p>评分用于初筛排序，最终建议仍需结合人工复核。</p>
+            <p>评分用于初筛排序；候选人姓名与大致年龄会根据简历内容识别/推断，最终仍需人工复核。</p>
           </div>
           <button class="ghost" id="addCurrentToRankBtn">加入排行榜</button>
         </div>
@@ -231,25 +256,58 @@
         <div class="section-title">
           <div>
             <h2>5. 候选人排行榜</h2>
-            <p>按分数从高到低排序，并保留置信度与风险摘要。</p>
+            <p>按岗位、时间、归类筛选候选人，并可为每位候选人添加备注，适合按周维护不同岗位的人才池。</p>
           </div>
           <div class="actions no-margin">
-            <button class="ghost" id="exportCsvBtn">导出 CSV</button>
+            <button class="ghost" id="exportCsvBtn">导出当前筛选 CSV</button>
+            <button class="ghost" id="resetRankFilterBtn">重置筛选</button>
             <button class="danger" id="clearRankBtn">清空</button>
           </div>
+        </div>
+        
+        <div class="filter-card">
+          <div class="filter-grid">
+            <div>
+              <label>按岗位筛选</label>
+              <select id="rankJobFilter"><option value="">全部岗位</option></select>
+            </div>
+            <div>
+              <label>按归类筛选</label>
+              <select id="rankCategoryFilter">
+                <option value="">全部归类</option>
+                <option value="优先推进">优先推进</option>
+                <option value="建议推进">建议推进</option>
+                <option value="待复核">待复核</option>
+                <option value="作为储备">作为储备</option>
+                <option value="不建议推进">不建议推进</option>
+                <option value="已联系">已联系</option>
+                <option value="已面试">已面试</option>
+                <option value="已淘汰">已淘汰</option>
+              </select>
+            </div>
+            <div>
+              <label>关键词搜索</label>
+              <input id="rankKeywordFilter" placeholder="搜索姓名、备注、摘要" />
+            </div>
+            <div class="week-filter">
+              <label>时间范围</label>
+              <label class="inline-check compact"><input id="rankThisWeekOnly" type="checkbox" /> <span>只看本周加入</span></label>
+            </div>
+          </div>
+          <div class="rank-summary" id="rankSummary">当前显示全部候选人。</div>
         </div>
         <div class="table-wrap">
           <table>
             <thead>
               <tr>
                 <th>排名</th>
-                <th>候选人</th>
+                <th>候选人 / 大致年龄</th>
                 <th>分数</th>
                 <th>置信度</th>
-                <th>模型</th>
-                <th>Token</th>
-                <th>等级</th>
-                <th>建议</th>
+                <th>岗位</th>
+                <th>归类</th>
+                <th>模型 / Token</th>
+                <th>备注</th>
                 <th>时间</th>
                 <th>操作</th>
               </tr>
@@ -258,6 +316,52 @@
           </table>
         </div>
       </section>
+
+
+      <section class="panel" id="backup">
+        <div class="section-title">
+          <div>
+            <h2>6. 数据备份 / 恢复</h2>
+            <p>完整备份使用 JSON 文件，适合更新软件、换电脑或防止数据丢失；排行榜 CSV 仅适合查看，不适合完整恢复。</p>
+          </div>
+          <div class="actions no-margin">
+            <button class="ghost" id="exportBackupBtn">导出完整备份 JSON</button>
+            <button class="primary" id="importBackupBtn">导入备份 JSON</button>
+          </div>
+        </div>
+
+        <div class="quality-grid">
+          <div class="quality-card">
+            <h3>备份包含</h3>
+            <ul>
+              <li>岗位标准、必要项、加分项、一票否决项</li>
+              <li>候选人排行榜、姓名、年龄推断、归类、备注、评分摘要、置信度、模型与 Token 记录</li>
+              <li>模型选择等本地设置</li>
+            </ul>
+          </div>
+          <div class="quality-card">
+            <h3>API Key 安全</h3>
+            <p>默认不建议导出 API Key。只有勾选下方选项时，才会把 API Key 一并写入备份文件。</p>
+            <label class="inline-check">
+              <input id="includeApiKeyBackup" type="checkbox" />
+              <span>导出时包含 API Key（敏感信息，不要分享给别人）</span>
+            </label>
+          </div>
+          <div class="quality-card">
+            <h3>推荐用法</h3>
+            <ul>
+              <li>更新软件前，先导出一次完整备份</li>
+              <li>换电脑时，先导出 JSON，再在新电脑导入</li>
+              <li>日常给客户看排行榜，继续用 CSV 导出</li>
+            </ul>
+          </div>
+        </div>
+
+        <div class="status" id="backupStatus"></div>
+        <div class="message success" id="backupSuccess"></div>
+        <div class="message error" id="backupError"></div>
+      </section>
+
     </main>
   </div>
 

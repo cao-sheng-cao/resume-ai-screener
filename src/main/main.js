@@ -147,6 +147,68 @@ const DEEPSEEK_MODELS = [
   { id: 'deepseek-reasoner', label: 'Legacy deepseek-reasoner｜兼容推理模式', thinking: '', note: '旧兼容模型名，对应思考模式' }
 ];
 
+const STRICTNESS_LEVELS = {
+  1: {
+    label: '1度｜宽松探索',
+    temperature: 0.25,
+    guide: '用于人才池拓展。可以认可相邻行业、相关职责和潜力匹配；简历未写得很硬但有明显相关经历时，可判为部分满足并给较高区间。'
+  },
+  2: {
+    label: '2度｜适度宽松',
+    temperature: 0.2,
+    guide: '用于一般初筛。允许把相关经验折算为部分满足，但核心必要项仍不能放宽；证据不足必须写待核实。'
+  },
+  3: {
+    label: '3度｜标准推荐',
+    temperature: 0.15,
+    guide: '默认推荐。严格按岗位标准和简历原文判断；没有明确证据不得给满分；相关但不直接的经历一般判为部分满足。'
+  },
+  4: {
+    label: '4度｜严格证据',
+    temperature: 0.1,
+    guide: '用于重点岗位复核。必须有清晰原文证据；相邻经验只能给较低部分分；缺少 quota、deal size、客户层级等硬证据要明显扣分。'
+  },
+  5: {
+    label: '5度｜极严格硬筛',
+    temperature: 0.05,
+    guide: '用于终面前硬筛或高价值岗位。只承认直接、明确、可验证的证据；没有写出的内容一律不得推断为满足；必要项模糊时倾向待核实/不满足。'
+  }
+};
+
+function getStrictnessConfig(level) {
+  const n = Math.max(1, Math.min(5, Number(level || 3)));
+  return { level: n, ...(STRICTNESS_LEVELS[n] || STRICTNESS_LEVELS[3]) };
+}
+
+function buildStrictnessInstruction(level) {
+  const cfg = getStrictnessConfig(level);
+  const table = {
+    1: '宽松：相关经验可给较高部分分，允许把潜力和相邻经验纳入判断；但不得编造事实。',
+    2: '适度宽松：相关经验可部分折算，核心必要项仍需证据；证据不足写待核实。',
+    3: '标准：以岗位标准和简历原文为准；直接证据给高分，相关但不直接给部分分。',
+    4: '严格：必须有明确原文证据；缺少硬指标、客户层级、签约结果时明显扣分。',
+    5: '极严格：只承认直接、明确、可验证证据；没有写出的内容不得推断，模糊项倾向不满足或待核实。'
+  };
+  return `【AI 判断严格程度】
+当前严格度：${cfg.label}
+总体原则：${cfg.guide}
+执行规则：${table[cfg.level]}
+
+同一种情况的参考判断：
+- 情况A：候选人有云生态/合作伙伴/Marketplace经验，但没有明确写“直接销售云产品并独立close客户”。
+  1度：可视为较强相关，Sales/云背景可给较高部分分；
+  3度：云背景部分满足，直接云销售与closing需待核实；
+  5度：不得视为直接云销售，云销售/closing只能给低部分分或待核实。
+- 情况B：候选人写“管理战略客户关系”，但没有写C-level、合同金额、quota。
+  1度：可判定有大客户相关经验，但列为待核实；
+  3度：战略客户部分满足，C-level和quota证据不足要扣分；
+  5度：不得判定为完整战略大客户销售能力，关键项待核实或不满足。
+- 情况C：候选人年限够，但行业不是完全同类。
+  1度：可给较高行业迁移分；
+  3度：按相邻行业部分满足；
+  5度：如果岗位要求强行业匹配，只给低部分分。`;
+}
+
 function getModelConfig(modelKey) {
   const key = String(modelKey || 'deepseek-v4-flash:enabled');
   const [id, thinking = ''] = key.split(':');
@@ -166,6 +228,23 @@ function normalizeChecks(value) {
     confidence: clamp(x?.confidence ?? 0, 0, 100)
   })).filter(x => x.item);
 }
+
+
+function normalizeCandidateProfile(profile) {
+  const p = profile && typeof profile === 'object' ? profile : {};
+  const timeline = Array.isArray(p.educationTimeline) ? p.educationTimeline.map(x => String(x)).filter(Boolean) : [];
+  return {
+    nameFromResume: String(p.nameFromResume || ''),
+    ageEstimate: String(p.ageEstimate || '待推断'),
+    ageRange: String(p.ageRange || '待推断'),
+    ageConfidence: clamp(p.ageConfidence ?? 0, 0, 100),
+    ageInferenceBasis: String(p.ageInferenceBasis || '简历年份信息不足，无法可靠推断。'),
+    educationTimeline: timeline,
+    firstFullTimeWorkYear: String(p.firstFullTimeWorkYear || ''),
+    ageWarning: String(p.ageWarning || '年龄为基于教育年份与工作年份的粗略推断，仅供初筛参考，不应作为录用或淘汰依据。')
+  };
+}
+
 
 function normalizeResult(data, passLine) {
   const score = clamp(data?.score ?? 0, 0, 100);
@@ -188,7 +267,8 @@ function normalizeResult(data, passLine) {
   }
 
   return {
-    candidateName: data?.candidateName || '待识别',
+    candidateName: data?.candidateName || data?.candidateProfile?.nameFromResume || '待识别',
+    candidateProfile: normalizeCandidateProfile(data?.candidateProfile),
     score,
     confidence,
     level,
@@ -221,6 +301,8 @@ function normalizeResult(data, passLine) {
     model: data?.model || 'deepseek-v4-flash',
     modelLabel: data?.modelLabel || data?.model || 'DeepSeek',
     thinkingMode: data?.thinkingMode || '',
+    strictnessLevel: clamp(data?.strictnessLevel ?? 3, 1, 5),
+    strictnessLabel: data?.strictnessLabel || getStrictnessConfig(data?.strictnessLevel || 3).label,
     usage: normalizeUsage(data?.usage),
     createdAt: new Date().toISOString()
   };
@@ -229,8 +311,9 @@ function normalizeResult(data, passLine) {
 function buildPrompt(payload) {
   const {
     jobTitle, positionOverview, scoringRule, mustHave, niceToHave, vetoItems,
-    extraNotes, resumeText, passLine
+    extraNotes, resumeText, passLine, strictnessLevel
   } = payload;
+  const strictnessInstruction = buildStrictnessInstruction(strictnessLevel || 3);
 
   return `
 请你作为严谨的招聘初筛顾问，按照【用户可编辑岗位标准】评估候选人简历。
@@ -242,6 +325,11 @@ function buildPrompt(payload) {
 4. 对低置信度、证据不足、PDF读取可能不完整的情况，要写入 verificationItems。
 5. 评分要严格按照岗位标准，不要因为简历写得漂亮就放宽硬性要求。
 6. 输出必须是合法 JSON，不要输出 Markdown。
+7. 必须尽量识别候选人姓名，并在 candidateProfile 中给出大致年龄推断。
+8. 年龄推断只能基于简历里的本科/硕士/博士年份、毕业年份、第一份全职工作年份、累计工作年限等信息；不得凭空编造。
+9. 年龄只输出“约xx岁”或“约xx-xx岁”这类粗略范围，并写明推断依据与置信度；信息不足时写“待推断”。
+
+${strictnessInstruction}
 
 【岗位名称】
 ${jobTitle}
@@ -272,16 +360,42 @@ ${scoringRule}
 【额外备注】
 ${extraNotes || '无'}
 
+
+【候选人姓名与年龄推断规则】
+- candidateName 必须优先从简历抬头、姓名字段、LinkedIn姓名、文件内容中识别；无法识别写“待识别”。
+- 年龄推断不是硬性评价标准，不得因为年龄本身给候选人加分或扣分。
+- 年龄推断只能用于招聘沟通时了解候选人大致资历阶段，必须保守表达。
+- 可参考以下经验规则：
+  1. 如果有本科毕业年份，可粗略按“本科毕业年龄约22岁”推算。
+  2. 如果有硕士毕业年份，可粗略按“硕士毕业年龄约24-26岁”推算。
+  3. 如果有博士毕业年份，可粗略按“博士毕业年龄约27-32岁”推算。
+  4. 如果只有第一份全职工作年份，可粗略按“开始全职工作年龄约22-24岁”推算。
+  5. 如果只有“工作经验X年”，可按当前年份减工作年限，再结合22-24岁起步推断年龄范围。
+- 如果教育年份与工作年份互相矛盾，年龄置信度必须降低，并写入 ageWarning 或 verificationItems。
+- 当前年份按 2026 年计算。
+
 【候选人简历】
 ${resumeText}
 
 请严格输出下面这个 JSON 结构：
 {
   "candidateName": "候选人姓名，无法识别写待识别",
+  "candidateProfile": {
+    "nameFromResume": "从简历中识别出的姓名",
+    "ageEstimate": "约xx岁/约xx-xx岁/待推断",
+    "ageRange": "例如 35-39岁；无法推断写待推断",
+    "ageConfidence": 0,
+    "ageInferenceBasis": "用一句话说明年龄推断依据，例如：本科2009年毕业，按22岁本科毕业推算，2026年约39岁。",
+    "educationTimeline": ["本科：学校/专业/年份", "硕士：学校/专业/年份", "博士：学校/专业/年份"],
+    "firstFullTimeWorkYear": "第一份全职工作年份，无法识别写空字符串",
+    "ageWarning": "年龄为粗略推断，仅供初筛沟通参考，不作为录用或淘汰依据；如证据不足请说明。"
+  },
   "score": 0,
   "confidence": 0,
   "level": "强匹配/基本匹配/一般匹配/匹配度较低",
   "recommendation": "优先推进/建议推进/作为储备/不建议推进",
+  "strictnessLevel": 3,
+  "strictnessLabel": "3度｜标准推荐",
   "summary": "150字以内总体判断",
   "dataQuality": {
     "resumeCompleteness": 0,
@@ -350,7 +464,7 @@ ipcMain.handle('app:get-deepseek-models', () => DEEPSEEK_MODELS);
 
 ipcMain.handle('settings:load-key', () => {
   const settings = readJson('settings.json', {});
-  return { apiKey: settings.apiKey || '', modelKey: settings.modelKey || 'deepseek-v4-flash:enabled' };
+  return { apiKey: settings.apiKey || '', modelKey: settings.modelKey || 'deepseek-v4-flash:enabled', strictnessLevel: settings.strictnessLevel || 3 };
 });
 
 ipcMain.handle('settings:save-key', (event, apiKey) => {
@@ -373,6 +487,13 @@ ipcMain.handle('settings:clear-key', () => {
 ipcMain.handle('settings:save-model', (event, modelKey) => {
   const settings = readJson('settings.json', {});
   settings.modelKey = String(modelKey || 'deepseek-v4-flash:enabled');
+  writeJson('settings.json', settings);
+  return { ok: true };
+});
+
+ipcMain.handle('settings:save-strictness', (event, level) => {
+  const settings = readJson('settings.json', {});
+  settings.strictnessLevel = Math.max(1, Math.min(5, Number(level || 3)));
   writeJson('settings.json', settings);
   return { ok: true };
 });
@@ -413,6 +534,144 @@ ipcMain.handle('leaderboard:clear', () => {
 
 ipcMain.handle('app:open-data-folder', () => shell.openPath(app.getPath('userData')));
 
+
+function safeFileTimestamp() {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+}
+
+function buildBackupObject(options = {}) {
+  const includeApiKey = Boolean(options.includeApiKey);
+  const settings = readJson('settings.json', {});
+  const standard = readJson('standard.json', null);
+  const leaderboard = readJson('leaderboard.json', []);
+
+  const safeSettings = { ...settings };
+  if (!includeApiKey) {
+    delete safeSettings.apiKey;
+  }
+
+  return {
+    appName: APP_NAME,
+    appId: 'com.resume.ai.screener',
+    appVersion: app.getVersion(),
+    backupVersion: 1,
+    backupTime: new Date().toISOString(),
+    apiKeyIncluded: includeApiKey && Boolean(settings.apiKey),
+    settings: safeSettings,
+    standard,
+    leaderboard: Array.isArray(leaderboard) ? leaderboard : [],
+    meta: {
+      note: includeApiKey
+        ? 'This backup may include a DeepSeek API Key. Do not share it with others.'
+        : 'This backup does not include the DeepSeek API Key.',
+      exportedFrom: process.platform
+    }
+  };
+}
+
+function validateBackupObject(data) {
+  if (!data || typeof data !== 'object') {
+    throw new Error('备份文件格式不正确。');
+  }
+  if (!data.backupVersion) {
+    throw new Error('这不是有效的本应用备份文件：缺少 backupVersion。');
+  }
+  if (data.backupVersion > 1) {
+    throw new Error('备份文件版本高于当前应用支持版本，请先升级应用。');
+  }
+  return true;
+}
+
+ipcMain.handle('backup:export', async (event, options = {}) => {
+  const includeApiKey = Boolean(options.includeApiKey);
+  const defaultPath = path.join(
+    app.getPath('documents'),
+    `resume-screener-backup-${safeFileTimestamp()}${includeApiKey ? '-with-key' : ''}.json`
+  );
+
+  const result = await dialog.showSaveDialog({
+    title: '导出完整数据备份',
+    defaultPath,
+    filters: [
+      { name: 'JSON Backup', extensions: ['json'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePath) {
+    return { canceled: true };
+  }
+
+  const backup = buildBackupObject({ includeApiKey });
+  fs.writeFileSync(result.filePath, JSON.stringify(backup, null, 2), 'utf-8');
+
+  return {
+    ok: true,
+    filePath: result.filePath,
+    apiKeyIncluded: backup.apiKeyIncluded,
+    leaderboardCount: backup.leaderboard.length,
+    hasStandard: Boolean(backup.standard)
+  };
+});
+
+ipcMain.handle('backup:import', async () => {
+  const result = await dialog.showOpenDialog({
+    title: '导入完整数据备份',
+    properties: ['openFile'],
+    filters: [
+      { name: 'JSON Backup', extensions: ['json'] },
+      { name: 'All Files', extensions: ['*'] }
+    ]
+  });
+
+  if (result.canceled || !result.filePaths?.length) {
+    return { canceled: true };
+  }
+
+  const filePath = result.filePaths[0];
+  const raw = fs.readFileSync(filePath, 'utf-8');
+  const backup = JSON.parse(raw);
+  validateBackupObject(backup);
+
+  const currentSettings = readJson('settings.json', {});
+  const importedSettings = backup.settings && typeof backup.settings === 'object' ? backup.settings : {};
+  const mergedSettings = {
+    ...currentSettings,
+    ...importedSettings
+  };
+
+  // If the imported backup does not contain an API Key, keep the current local API Key.
+  if (!importedSettings.apiKey && currentSettings.apiKey) {
+    mergedSettings.apiKey = currentSettings.apiKey;
+  }
+
+  writeJson('settings.json', mergedSettings);
+
+  if (Object.prototype.hasOwnProperty.call(backup, 'standard')) {
+    if (backup.standard) writeJson('standard.json', backup.standard);
+    else {
+      const standardFile = dataPath('standard.json');
+      if (fs.existsSync(standardFile)) fs.unlinkSync(standardFile);
+    }
+  }
+
+  if (Array.isArray(backup.leaderboard)) {
+    writeJson('leaderboard.json', backup.leaderboard);
+  }
+
+  return {
+    ok: true,
+    filePath,
+    apiKeyImported: Boolean(importedSettings.apiKey),
+    apiKeyPreserved: Boolean(!importedSettings.apiKey && currentSettings.apiKey),
+    hasStandard: Boolean(backup.standard),
+    leaderboardCount: Array.isArray(backup.leaderboard) ? backup.leaderboard.length : 0,
+    backupTime: backup.backupTime || ''
+  };
+});
+
+
 ipcMain.handle('ai:analyze', async (event, payload) => {
   const settings = readJson('settings.json', {});
   const apiKey = String(payload.apiKey || settings.apiKey || '').trim();
@@ -422,7 +681,9 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
   if (!resumeText) throw new Error('简历正文为空。请先读取简历或直接粘贴简历正文。');
 
   const passLine = Number(payload.passLine || 75);
-  const prompt = buildPrompt({ ...payload, resumeText, passLine });
+  const strictnessConfig = getStrictnessConfig(payload.strictnessLevel || settings.strictnessLevel || 3);
+  settings.strictnessLevel = strictnessConfig.level;
+  const prompt = buildPrompt({ ...payload, resumeText, passLine, strictnessLevel: strictnessConfig.level });
 
   const modelKey = String(payload.modelKey || settings.modelKey || 'deepseek-v4-flash:enabled');
   const modelConfig = getModelConfig(modelKey);
@@ -438,7 +699,7 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
       },
       { role: 'user', content: prompt }
     ],
-    temperature: 0.2,
+    temperature: strictnessConfig.temperature,
     stream: false,
     response_format: { type: 'json_object' }
   };
@@ -469,6 +730,8 @@ ipcMain.handle('ai:analyze', async (event, payload) => {
     model: data.model || modelConfig.id,
     modelLabel: modelConfig.label,
     thinkingMode: modelConfig.thinking || '',
+    strictnessLevel: strictnessConfig.level,
+    strictnessLabel: strictnessConfig.label,
     usage: data.usage || {}
   }, passLine);
 });
